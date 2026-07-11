@@ -92,6 +92,31 @@
             padding: 0 10px;
         }
 
+        /* Trust Badges */
+        .trust-badges {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-bottom: 30px;
+        }
+
+        .trust-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: #666;
+            background: #111;
+            padding: 8px 14px;
+            border-radius: 20px;
+            border: 1px solid #222;
+        }
+
+        .trust-badge span {
+            font-size: 14px;
+        }
+
         .feature-grid {
             display: grid;
             gap: 12px;
@@ -178,6 +203,55 @@
             line-height: 1.5;
         }
 
+        /* Templates Section */
+        .templates-section {
+            margin: 30px 0;
+        }
+
+        .templates-section h3 {
+            color: #20e3b2;
+            font-size: 18px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .template-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+
+        .template-card {
+            background: #111;
+            border: 1px solid #222;
+            border-radius: 10px;
+            padding: 12px;
+            text-align: center;
+            transition: all 0.2s;
+        }
+
+        .template-card:hover {
+            border-color: #20e3b2;
+            transform: translateY(-2px);
+        }
+
+        .template-icon {
+            font-size: 24px;
+            margin-bottom: 6px;
+        }
+
+        .template-name {
+            color: #fff;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .template-desc {
+            color: #666;
+            font-size: 10px;
+        }
+
         .pricing-preview {
             margin: 30px 0;
             text-align: center;
@@ -204,6 +278,18 @@
             font-size: 20px;
             display: block;
             margin-bottom: 2px;
+        }
+
+        /* CTA Buttons */
+        .cta-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin: 20px 0;
+        }
+
+        .cta-buttons .btn {
+            margin: 0;
         }
 
         /* ===== AUTH EKRANI ===== */
@@ -642,7 +728,78 @@
         .back-link:hover {
             color: #20e3b2;
         }
-    </style>
+    
+        /* CTA Buttons - Large */
+        .btn-lg {
+            padding: 16px 24px;
+            font-size: 18px;
+        }
+
+        /* Templates Section - Improved */
+        .templates-section {
+            margin: 30px 0;
+        }
+
+        .templates-section h3 {
+            color: #20e3b2;
+            font-size: 18px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .template-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+
+        @media (max-width: 400px) {
+            .template-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        .template-card {
+            background: #111;
+            border: 1px solid #222;
+            border-radius: 10px;
+            padding: 14px 8px;
+            text-align: center;
+            transition: all 0.2s;
+        }
+
+        .template-card:hover {
+            border-color: #20e3b2;
+            transform: translateY(-2px);
+        }
+
+        .template-card-kombine {
+            grid-column: span 1;
+            background: linear-gradient(135deg, #1a1a1a, #111);
+            border: 1px solid #333;
+        }
+
+        .template-card-kombine:hover {
+            border-color: #ffb703;
+        }
+
+        .template-icon {
+            font-size: 24px;
+            margin-bottom: 6px;
+        }
+
+        .template-name {
+            color: #fff;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .template-desc {
+            color: #666;
+            font-size: 10px;
+        }
+</style>
 <base target="_blank">
 
     <!-- Google tag (gtag.js) -->
@@ -653,6 +810,7 @@
         gtag('js', new Date());
         gtag('config', 'G-PNSDK0P6WC');
     </script>
+<base target="_blank">
 <base target="_blank">
 </head>
 <body>
@@ -669,9 +827,35 @@
                 <p class="landing-desc">
                     Ameliyat sonrası epikriz notlarınızı sesli dikte ile kaydedin,
                     yapay zeka ile profesyonel operasyon raporlarına dönüştürün.
-                    11 farklı kalp damar cerrahisi şablonu ile dakikalar içinde
+                    Kalp damar cerrahisi şablonları ile dakikalar içinde
                     hazır raporlar oluşturun.
                 </p>
+
+                <!-- CTA Buttons - Moved to top -->
+                <div class="cta-buttons">
+                    <button class="btn btn-primary btn-lg" onclick="showAuth()">
+                        🎙️ Hemen Başlayın (Ücretsiz)
+                    </button>
+                    <button class="btn btn-outline btn-lg" onclick="document.getElementById('templates-section').scrollIntoView({behavior: 'smooth'})">
+                        📋 Şablonları Gör
+                    </button>
+                </div>
+                <p style="text-align: center; color: #555; font-size: 12px; margin-top: 10px;">
+                    1 ücretsiz rapor ile başlayın, kredi kartı gerekmez
+                </p>
+            </div>
+
+            <!-- Trust Badges -->
+            <div class="trust-badges">
+                <div class="trust-badge">
+                    <span>🔒</span> SSL Şifreli
+                </div>
+                <div class="trust-badge">
+                    <span>🌍</span> 60+ Ülke Vergi Uyumu
+                </div>
+                <div class="trust-badge">
+                    <span>⚡</span> Anında Rapor
+                </div>
             </div>
 
             <div class="feature-grid">
@@ -687,7 +871,7 @@
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">📋</div>
-                    <div class="feature-title">11 Cerrahi Şablon</div>
+                    <div class="feature-title">Cerrahi Şablonlar</div>
                     <div class="feature-text">CABG, AVR, MVR, Bentall, Karotis ve daha fazlası</div>
                 </div>
                 <div class="feature-card">
@@ -710,7 +894,7 @@
                     <div class="step-num">2</div>
                     <div class="step-content">
                         <h4>Operasyon Tipini Seçin</h4>
-                        <p>11 şablon arasından seçin veya otomatik tespit kullanın</p>
+                        <p>Şablonlar arasından seçin veya otomatik tespit kullanın</p>
                     </div>
                 </div>
                 <div class="step">
@@ -718,6 +902,68 @@
                     <div class="step-content">
                         <h4>Raporunuzu Alın</h4>
                         <p>Saniyeler içinde profesyonel epikriz notunuz hazır</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Templates Section - Improved -->
+            <div class="templates-section" id="templates-section">
+                <h3>Desteklenen Operasyonlar</h3>
+                <div class="template-grid">
+                    <div class="template-card">
+                        <div class="template-icon">❤️</div>
+                        <div class="template-name">CABG</div>
+                        <div class="template-desc">Koroner Bypass</div>
+                    </div>
+                    <div class="template-card">
+                        <div class="template-icon">💓</div>
+                        <div class="template-name">AVR</div>
+                        <div class="template-desc">Aort Kapak</div>
+                    </div>
+                    <div class="template-card">
+                        <div class="template-icon">💗</div>
+                        <div class="template-name">MVR</div>
+                        <div class="template-desc">Mitral Kapak</div>
+                    </div>
+                    <div class="template-card">
+                        <div class="template-icon">🫀</div>
+                        <div class="template-name">Bentall</div>
+                        <div class="template-desc">Aort Kök</div>
+                    </div>
+                    <div class="template-card">
+                        <div class="template-icon">🧠</div>
+                        <div class="template-name">Karotis</div>
+                        <div class="template-desc">Endarterektomi</div>
+                    </div>
+                    <div class="template-card">
+                        <div class="template-icon">🦵</div>
+                        <div class="template-name">Varis</div>
+                        <div class="template-desc">VSM Stripping</div>
+                    </div>
+                    <div class="template-card">
+                        <div class="template-icon">🔧</div>
+                        <div class="template-name">Triksupid</div>
+                        <div class="template-desc">Ring Anüloplasti</div>
+                    </div>
+                    <div class="template-card">
+                        <div class="template-icon">🩸</div>
+                        <div class="template-name">Embolektomi</div>
+                        <div class="template-desc">Trombektomi</div>
+                    </div>
+                    <div class="template-card">
+                        <div class="template-icon">🏗️</div>
+                        <div class="template-name">Asendan Aort</div>
+                        <div class="template-desc">Replasman</div>
+                    </div>
+                    <div class="template-card">
+                        <div class="template-icon">🩹</div>
+                        <div class="template-name">Psodoanevrizma</div>
+                        <div class="template-desc">Femoral</div>
+                    </div>
+                    <div class="template-card template-card-kombine">
+                        <div class="template-icon">➕</div>
+                        <div class="template-name">Kombine</div>
+                        <div class="template-desc">CABG + MVR</div>
                     </div>
                 </div>
             </div>
@@ -730,12 +976,15 @@
                 <div class="price-tag"><strong>$49</strong>Pro - 25 rapor</div>
             </div>
 
-            <button class="btn btn-primary" onclick="showAuth()" style="margin-top: 20px;">
-                Hemen Başlayın →
-            </button>
-            <p style="text-align: center; color: #555; font-size: 12px; margin-top: 10px;">
-                1 ücretsiz rapor ile başlayın, kredi kartı gerekmez
-            </p>
+            <!-- Bottom CTA -->
+            <div style="text-align: center; margin: 30px 0;">
+                <button class="btn btn-primary btn-lg" onclick="showAuth()">
+                    🚀 Hemen Başlayın - Ücretsiz Deneyin
+                </button>
+                <p style="color: #555; font-size: 12px; margin-top: 10px;">
+                    Kayıt olmadan 1 rapor oluşturun
+                </p>
+            </div>
 
             <div class="footer">
                 <div class="footer-avatar">👨‍⚕️</div>
@@ -748,9 +997,7 @@
                     © 2026 VascuScribe. Tüm hakları saklıdır.
                 </div>
             </div>
-        </div>
-
-        <!-- GIRIS EKRANI -->
+        </div><!-- GIRIS EKRANI -->
         <div id="authScreen" class="auth-screen hidden">
             <div class="logo">🫀</div>
             <h1>VascuScribe</h1>
@@ -819,7 +1066,7 @@
                     <option value="KAROTIS">Karotis Endarterektomi</option>
                     <option value="PSODOANEVRIZMA">Psodoanevrizma</option>
                     <option value="AVR">Aortik Kapak Degisimi</option>
-                    <option value="CABG_MVR">CABG + MVR</option>
+                    <option value="CABG_MVR">Kombine Ameliyatlar</option>
                     <option value="MVR">MVR</option>
                     <option value="TRIKUSPIT_RING">Triksupid Ring</option>
                     <option value="VARIS">Varis</option>
@@ -905,7 +1152,7 @@
 
             <!-- Sync button for when webhook doesn't work -->
             <button class="sync-btn" onclick="syncSubscription()">
-                🔄 Aboneligi Senkronize Et
+                Aboneligi Senkronize Et
             </button>
             <p style="font-size: 11px; color: #555; margin-top: 4px;">
                 Odeme yaptiysaniz fakat kredi yuklenmediyse yukaridaki butona basin
@@ -913,7 +1160,7 @@
 
             <!-- Dev test button -->
             <button class="dev-btn" onclick="addTestCredits()">
-                🧪 TEST: Kredi Ekle (sadece gelistirme)
+                TEST: Kredi Ekle (sadece gelistirme)
             </button>
 
             <button class="btn" style="background: #222; color: #888; margin-top: 10px;" onclick="logout()">
@@ -1065,7 +1312,7 @@
 
                 if (data.plan !== 'trial' && data.plan !== 'expired' && data.credits > 0) {
                     badge.className = 'badge badge-premium';
-                    badge.textContent = `⭐ ${data.plan.toUpperCase()} | Kalan: ${data.credits}`;
+                    badge.textContent = `${data.plan.toUpperCase()} | Kalan: ${data.credits}`;
                     showScreen('mainScreen');
                 } else if (data.credits > 0) {
                     badge.className = 'badge badge-free';
@@ -1319,8 +1566,7 @@
         async function addTestCredits() {
             if (!confirm('TEST: Bu buton sadece gelistirme icindir. Kredi eklemek istiyor musunuz?')) return;
 
-            // Gelistirme ortaminda secret gerekmeyebilir, production'da DEV_SECRET gerekir
-            const secret = prompt('Gelistirme secret'i girin (bos birakin eger ayarlanmamissa):') || '';
+            const secret = prompt('Gelistirme secret\'i girin (bos birakin eger ayarlanmamissa):') || '';
 
             try {
                 const res = await fetch(`${API_URL}/dev-add-credits`, {

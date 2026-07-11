@@ -1,6 +1,6 @@
 """
 VascuScribe - Vascular Surgery Note Assistant
-Backend API v3.0 - PostgreSQL Edition
+Backend API v3.1 - Polar API Fix + Landing Page Enhanced
 ============================================
 """
 
@@ -72,10 +72,10 @@ def init_db():
         """)
         conn.commit()
         cur.close()
-        print("✅ PostgreSQL tablolari olusturuldu")
+        print("PostgreSQL tablolari olusturuldu")
         return True
     except Exception as e:
-        print(f"⚠️ Veritabani baslatma hatasi: {e}")
+        print(f"Veritabani baslatma hatasi: {e}")
         return False
     finally:
         release_db(conn)
@@ -203,7 +203,6 @@ def get_user(email: str) -> dict:
     if db_available():
         user = db_get_user(email)
         if user:
-            # Timestamp donusumleri
             if user.get('plan_expires'):
                 user['plan_expires'] = user['plan_expires'].timestamp() if isinstance(user['plan_expires'], datetime) else user['plan_expires']
             if user.get('created_at'):
@@ -340,13 +339,13 @@ try:
     from polar_sdk import Polar
     from polar_sdk.webhooks import validate_event, WebhookVerificationError
     POLAR_AVAILABLE = True
-    print("✅ Polar SDK yuklendi")
+    print("Polar SDK yuklendi")
 except ImportError as e:
     Polar = None
     validate_event = None
     WebhookVerificationError = Exception
     POLAR_AVAILABLE = False
-    print(f"⚠️ Polar SDK yuklenemedi: {e}")
+    print(f"Polar SDK yuklenemedi: {e}")
 
 POLAR_ACCESS_TOKEN = os.getenv("POLAR_ACCESS_TOKEN", "")
 POLAR_WEBHOOK_SECRET = os.getenv("POLAR_WEBHOOK_SECRET", "")
@@ -358,17 +357,20 @@ if POLAR_AVAILABLE and POLAR_ACCESS_TOKEN:
             access_token=POLAR_ACCESS_TOKEN,
             server=os.getenv("POLAR_SERVER", "sandbox")
         )
-        print("✅ Polar client basariyla olusturuldu")
+        print("Polar client basariyla olusturuldu")
     except Exception as e:
-        print(f"⚠️ Polar client olusturulamadi: {e}")
+        print(f"Polar client olusturulamadi: {e}")
         polar_client = None
 else:
-    print("⚠️ Polar devre disi: TOKEN eksik veya SDK yuklenemedi")
+    print("Polar devre disi: TOKEN eksik veya SDK yuklenemedi")
 
+# ============================================================
+# POLAR PRODUCT ID'LERI (Price ID degil, Product ID!)
+# ============================================================
 POLAR_PRODUCTS = {
-    "mini":     os.getenv("POLAR_MINI_PRICE_ID", ""),
-    "standard": os.getenv("POLAR_STANDARD_PRICE_ID", ""),
-    "pro":      os.getenv("POLAR_PRO_PRICE_ID", ""),
+    "mini":       os.getenv("POLAR_MINI_PRICE_ID", ""),
+    "standard":   os.getenv("POLAR_STANDARD_PRICE_ID", ""),
+    "pro":        os.getenv("POLAR_PRO_PRICE_ID", ""),
     "enterprise": os.getenv("POLAR_ENTERPRISE_PRICE_ID", ""),
 }
 
@@ -378,10 +380,10 @@ POLAR_PRODUCTS = {
 load_users()
 
 PLANS = {
-    "trial":    {"price": 0,     "credits": 1,   "days": 7},
-    "mini":     {"price": 990,  "credits": 3,   "days": 30},
-    "standard": {"price": 2300, "credits": 10,  "days": 30},
-    "pro":      {"price": 4900, "credits": 25,  "days": 30},
+    "trial":      {"price": 0,     "credits": 1,   "days": 7},
+    "mini":       {"price": 990,   "credits": 3,   "days": 30},
+    "standard":   {"price": 2300,  "credits": 10,  "days": 30},
+    "pro":        {"price": 4900,  "credits": 25,  "days": 30},
     "enterprise": {"price": 19900, "credits": 100, "days": 30},
 }
 
@@ -688,7 +690,6 @@ def detect_template(text: str) -> str:
 def get_or_create_user(email: str, ip: str = None) -> dict:
     user = get_user(email)
     if not user:
-        # IP kontrolu
         if ip:
             all_users = get_all_users()
             for other_email, other in all_users.items():
@@ -981,7 +982,7 @@ async def user_status(email: str, request: Request):
     }
 
 # ============================================================
-# POLAR CHECKOUT - ROBUST VERSION WITH FALLBACK
+# POLAR CHECKOUT - FIXED FOR NEW API (products array)
 # ============================================================
 
 @app.post("/create-checkout")
@@ -989,9 +990,9 @@ async def create_checkout(req: PolarCheckoutRequest):
     if not polar_client:
         raise HTTPException(status_code=500, detail="Polar yapilandirma hatasi - .env dosyasini kontrol edin")
 
-    price_id = POLAR_PRODUCTS.get(req.plan)
-    if not price_id:
-        raise HTTPException(status_code=400, detail=f"Gecersiz plan '{req.plan}' veya fiyat ID ayarlanmamis. .env'deki POLAR_*_PRICE_ID degerlerini kontrol edin.")
+    product_id = POLAR_PRODUCTS.get(req.plan)
+    if not product_id:
+        raise HTTPException(status_code=400, detail=f"Gecersiz plan '{req.plan}' veya Product ID ayarlanmamis. .env'deki POLAR_*_PRICE_ID degerlerini kontrol edin.")
 
     try:
         customer = None
@@ -1034,9 +1035,9 @@ async def create_checkout(req: PolarCheckoutRequest):
         if not customer_id:
             raise HTTPException(status_code=500, detail="Musteri ID alinamadi")
 
-        # Create checkout
+        # FIXED: Use products array instead of product_id (Polar 2026 API)
         checkout_req = {
-            "products": [price_id],
+            "products": [product_id],  # Array format - required by new API
             "success_url": req.success_url,
             "return_url": req.return_url,
             "customer_id": customer_id,
@@ -1221,7 +1222,7 @@ async def customer_portal(req: CustomerPortalRequest):
 
 
 # ============================================================
-# POLAR WEBHOOK
+# POLAR WEBHOOK - FIXED FOR NEW API
 # ============================================================
 
 @app.post("/polar-webhook")
@@ -1249,7 +1250,7 @@ async def polar_webhook(request: Request):
     event_type = event.type
     data = event.data
 
-    print(f"📩 Polar webhook received: {event_type}")
+    print(f"Polar webhook received: {event_type}")
 
     def get_metadata(data_obj):
         metadata = {}
@@ -1264,13 +1265,14 @@ async def polar_webhook(request: Request):
     email = metadata.get("email")
     plan = metadata.get("plan", "mini")
 
+    # Fallback: try to get email from customer object
     if not email and hasattr(data, 'customer') and data.customer:
         if hasattr(data.customer, 'external_id') and data.customer.external_id:
             email = data.customer.external_id
         elif hasattr(data.customer, 'email') and data.customer.email:
             email = data.customer.email
 
-    print(f"📧 Email: {email}, Plan: {plan}")
+    print(f"Email: {email}, Plan: {plan}")
 
     if event_type in ["subscription.active", "subscription.created", "subscription.updated"]:
         if email and plan in PLANS:
@@ -1284,12 +1286,12 @@ async def polar_webhook(request: Request):
                 polar_subscription_id=str(data.id) if hasattr(data, 'id') else None,
                 polar_customer_id=str(data.customer_id) if hasattr(data, 'customer_id') else None
             )
-            print(f"✅ Subscription activated/updated: {email} -> {plan}")
+            print(f"Subscription activated/updated: {email} -> {plan}")
 
     elif event_type in ["subscription.revoked", "subscription.canceled"]:
         if email and get_user(email):
             update_user(email, plan="expired", credits=0)
-            print(f"❌ Subscription revoked: {email}")
+            print(f"Subscription revoked: {email}")
 
     elif event_type in ["order.paid", "checkout.completed"]:
         if email and plan in PLANS:
@@ -1301,13 +1303,13 @@ async def polar_webhook(request: Request):
                 plan=plan,
                 plan_expires=time.time() + (plan_config["days"] * 24 * 3600)
             )
-            print(f"💰 Order paid: {email} -> {plan}")
+            print(f"Order paid: {email} -> {plan}")
 
     return {"status": "success"}
 
 
 # ============================================================
-# LEGACY CHECKOUT ENDPOINT - ROBUST
+# LEGACY CHECKOUT ENDPOINT - FIXED FOR NEW API
 # ============================================================
 
 @app.post("/create-checkout-session")
@@ -1353,8 +1355,9 @@ async def create_checkout_legacy(req: Request):
 
         customer_id = customer.id if hasattr(customer, 'id') else customer.get('id')
 
+        # FIXED: Use products array for new API
         checkout = polar_client.checkouts.create(request={
-            "products": [price_id],
+            "products": [price_id],  # Array format for new API
             "success_url": "https://vascuscribe.com/success?email=" + email,
             "return_url": "https://vascuscribe.com/",
             "customer_id": customer_id,
@@ -1473,7 +1476,7 @@ async def success(email: str = None):
     </head>
     <body>
         <div class="spinner"></div>
-        <h1>✅ Odeme Basarili!</h1>
+        <h1>Odeme Basarili!</h1>
         <p>Kredileriniz yukleniyor...</p>
         <p>Lutfen bekleyin, otomatik yonlendirme yapilacak...</p>
         <a href="https://vascuscribe.com/" class="btn">Ana Sayfaya Don</a>
