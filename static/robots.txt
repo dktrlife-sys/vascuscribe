@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /dev-add-credits
+
+Sitemap: https://vascuscribe.com/sitemap.xml
