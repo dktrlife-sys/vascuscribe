@@ -6,3 +6,4 @@ openai==1.75.0
 python-multipart==0.0.9
 polar-sdk==0.31.0
 httpx==0.28.1
+psycopg2-binary==2.9.9
