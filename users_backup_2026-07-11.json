@@ -1,0 +1,20 @@
+{
+  "users": {
+    "test@test.com": {
+      "credits": 0,
+      "plan": "trial",
+      "plan_expires": 1783923511.749176,
+      "created_at": 1783318711.749177,
+      "ip": null,
+      "password_hash": "$2b$12$.JIcF6tASpD6t/Pxf7fb7OuRlfcq6IX8lBgLHZy5sqXKrzk3UWZRW"
+    },
+    "dktr.life@gmail.com": {
+      "credits": 2,
+      "plan": "mini",
+      "plan_expires": 1786210498.694826,
+      "created_at": 1783318717.912322,
+      "ip": null,
+      "password_hash": "$2b$12$L4wJUzKMya1D2V2mOq7FxuxEFDI6/E0LA1J22lMoA4o.3GpOfpl7m"
+    }
+  }
+}
