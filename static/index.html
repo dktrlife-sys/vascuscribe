@@ -4,25 +4,25 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="description" content="VascuScribe - AI-powered vascular surgery note assistant. Transcribe, generate, and manage patient reports effortlessly.">
-    <meta name="keywords" content="vascular surgery, medical notes, AI transcription, patient reports, surgery assistant">
+    <meta name="keywords" content="vascular surgery, medical notes, AI transcription, patient reports, surgery assistant, kalp damar cerrahisi, epikriz">
     <meta name="author" content="VascuScribe">
     <meta name="robots" content="index, follow">
     <meta name="theme-color" content="#0ea5e9">
-    
+
     <!-- Open Graph / Social Media -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://vascuscribe.com/">
     <meta property="og:title" content="VascuScribe - Vascular Surgery Note Assistant">
     <meta property="og:description" content="AI-powered vascular surgery note assistant. Transcribe, generate, and manage patient reports effortlessly.">
     <meta property="og:image" content="https://vascuscribe.com/og-image.png">
-    
+
     <!-- Twitter Card -->
     <meta property="twitter:card" content="summary_large_image">
     <meta property="twitter:url" content="https://vascuscribe.com/">
     <meta property="twitter:title" content="VascuScribe - Vascular Surgery Note Assistant">
     <meta property="twitter:description" content="AI-powered vascular surgery note assistant. Transcribe, generate, and manage patient reports effortlessly.">
     <meta property="twitter:image" content="https://vascuscribe.com/og-image.png">
-    
+
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <title>VascuScribe - Vascular Surgery Note Assistant</title>
     <style>
@@ -42,10 +42,174 @@
             padding: 16px;
         }
 
-        /* GIRIS EKRANI */
+        /* ===== LANDING PAGE ===== */
+        .landing-hero {
+            text-align: center;
+            padding: 40px 0 30px;
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        .landing-logo {
+            width: 100px;
+            height: 100px;
+            background: linear-gradient(135deg, #20e3b2, #0a8f6e);
+            border-radius: 24px;
+            margin: 0 auto 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 50px;
+            box-shadow: 0 8px 32px rgba(32, 227, 178, 0.2);
+        }
+
+        .landing-title {
+            color: #20e3b2;
+            font-size: 32px;
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+        }
+
+        .landing-subtitle {
+            color: #888;
+            font-size: 15px;
+            margin-bottom: 6px;
+        }
+
+        .landing-tagline {
+            color: #20e3b2;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 30px;
+        }
+
+        .landing-desc {
+            color: #aaa;
+            font-size: 14px;
+            line-height: 1.7;
+            margin-bottom: 30px;
+            padding: 0 10px;
+        }
+
+        .feature-grid {
+            display: grid;
+            gap: 12px;
+            margin-bottom: 30px;
+        }
+
+        .feature-card {
+            background: linear-gradient(135deg, #1a1a1a, #111);
+            border: 1px solid #222;
+            border-radius: 14px;
+            padding: 18px;
+            text-align: left;
+            transition: all 0.3s;
+        }
+
+        .feature-card:hover {
+            border-color: #20e3b2;
+            transform: translateY(-2px);
+        }
+
+        .feature-icon {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .feature-title {
+            color: #20e3b2;
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        .feature-text {
+            color: #888;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .how-it-works {
+            margin: 30px 0;
+        }
+
+        .how-it-works h3 {
+            color: #20e3b2;
+            font-size: 18px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .step {
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            margin-bottom: 18px;
+            padding: 14px;
+            background: #111;
+            border-radius: 12px;
+            border-left: 3px solid #20e3b2;
+        }
+
+        .step-num {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #20e3b2, #0a8f6e);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: #000;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+
+        .step-content h4 {
+            color: #fff;
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+
+        .step-content p {
+            color: #888;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .pricing-preview {
+            margin: 30px 0;
+            text-align: center;
+        }
+
+        .pricing-preview h3 {
+            color: #20e3b2;
+            font-size: 18px;
+            margin-bottom: 16px;
+        }
+
+        .price-tag {
+            display: inline-block;
+            background: rgba(32, 227, 178, 0.1);
+            border: 1px solid #20e3b2;
+            border-radius: 10px;
+            padding: 10px 20px;
+            margin: 6px;
+            color: #20e3b2;
+            font-size: 14px;
+        }
+
+        .price-tag strong {
+            font-size: 20px;
+            display: block;
+            margin-bottom: 2px;
+        }
+
+        /* ===== AUTH EKRANI ===== */
         .auth-screen {
             text-align: center;
-            padding-top: 60px;
+            padding-top: 40px;
             animation: fadeIn 0.5s;
         }
 
@@ -132,6 +296,17 @@
         .btn-secondary {
             background: #ffb703;
             color: #000;
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 2px solid #333;
+            color: #888;
+        }
+
+        .btn-outline:hover {
+            border-color: #20e3b2;
+            color: #20e3b2;
         }
 
         .btn-mic {
@@ -334,6 +509,10 @@
             text-decoration: none;
         }
 
+        .footer-contact a:hover {
+            text-decoration: underline;
+        }
+
         .footer-copy {
             color: #444;
             font-size: 11px;
@@ -452,6 +631,17 @@
             border-color: #ffb703;
             color: #ffb703;
         }
+
+        .back-link {
+            color: #666;
+            font-size: 13px;
+            cursor: pointer;
+            margin-top: 16px;
+            display: inline-block;
+        }
+        .back-link:hover {
+            color: #20e3b2;
+        }
     </style>
 <base target="_blank">
 
@@ -463,12 +653,105 @@
         gtag('js', new Date());
         gtag('config', 'G-PNSDK0P6WC');
     </script>
+<base target="_blank">
 </head>
 <body>
     <div class="container">
 
+        <!-- ===== LANDING PAGE ===== -->
+        <div id="landingScreen">
+            <div class="landing-hero">
+                <div class="landing-logo">🫀</div>
+                <h1 class="landing-title">VascuScribe</h1>
+                <p class="landing-subtitle">Vascular Surgery Note Assistant</p>
+                <p class="landing-tagline">AI-Powered Operative Reporting</p>
+
+                <p class="landing-desc">
+                    Ameliyat sonrası epikriz notlarınızı sesli dikte ile kaydedin,
+                    yapay zeka ile profesyonel operasyon raporlarına dönüştürün.
+                    11 farklı kalp damar cerrahisi şablonu ile dakikalar içinde
+                    hazır raporlar oluşturun.
+                </p>
+            </div>
+
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🎙️</div>
+                    <div class="feature-title">Sesli Dikte</div>
+                    <div class="feature-text">Ameliyatı anlatın, Whisper AI Türkçe'yi metne dönüştürsün</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🤖</div>
+                    <div class="feature-title">AI Rapor Oluşturma</div>
+                    <div class="feature-text">GPT-4o ile ham notları profesyonel epikrize dönüştürün</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📋</div>
+                    <div class="feature-title">11 Cerrahi Şablon</div>
+                    <div class="feature-text">CABG, AVR, MVR, Bentall, Karotis ve daha fazlası</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🌍</div>
+                    <div class="feature-title">Çift Dil Desteği</div>
+                    <div class="feature-text">Türkçe ve İngilizce rapor çıktısı seçeneği</div>
+                </div>
+            </div>
+
+            <div class="how-it-works">
+                <h3>Nasıl Çalışır?</h3>
+                <div class="step">
+                    <div class="step-num">1</div>
+                    <div class="step-content">
+                        <h4>Mikrofona Dokunun</h4>
+                        <p>Ameliyatı sesli olarak anlatın veya metin olarak girin</p>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-num">2</div>
+                    <div class="step-content">
+                        <h4>Operasyon Tipini Seçin</h4>
+                        <p>11 şablon arasından seçin veya otomatik tespit kullanın</p>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-num">3</div>
+                    <div class="step-content">
+                        <h4>Raporunuzu Alın</h4>
+                        <p>Saniyeler içinde profesyonel epikriz notunuz hazır</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pricing-preview">
+                <h3>Fiyatlandırma</h3>
+                <div class="price-tag"><strong>1</strong>Ücretsiz deneme raporu</div>
+                <div class="price-tag"><strong>$9</strong>Mini - 3 rapor</div>
+                <div class="price-tag"><strong>$23</strong>Standart - 10 rapor</div>
+                <div class="price-tag"><strong>$49</strong>Pro - 25 rapor</div>
+            </div>
+
+            <button class="btn btn-primary" onclick="showAuth()" style="margin-top: 20px;">
+                Hemen Başlayın →
+            </button>
+            <p style="text-align: center; color: #555; font-size: 12px; margin-top: 10px;">
+                1 ücretsiz rapor ile başlayın, kredi kartı gerekmez
+            </p>
+
+            <div class="footer">
+                <div class="footer-avatar">👨‍⚕️</div>
+                <div class="footer-name">Dr. İlhan Güngör Yücel</div>
+                <div class="footer-title">Kalp Damar Cerrahisi Uzmanı</div>
+                <div class="footer-contact">
+                    <a href="mailto:info@vascuscribe.com">info@vascuscribe.com</a>
+                </div>
+                <div class="footer-copy">
+                    © 2026 VascuScribe. Tüm hakları saklıdır.
+                </div>
+            </div>
+        </div>
+
         <!-- GIRIS EKRANI -->
-        <div id="authScreen" class="auth-screen">
+        <div id="authScreen" class="auth-screen hidden">
             <div class="logo">🫀</div>
             <h1>VascuScribe</h1>
             <p class="subtitle">Vascular Surgery Note Assistant</p>
@@ -480,22 +763,11 @@
             <button class="btn btn-primary" onclick="login()">Oturum Ac</button>
             <button class="btn" style="background: #222; color: #888;" onclick="showRegister()">Hesap Olustur</button>
 
-            <div style="margin-top: 30px; font-size: 12px; color: #555;">
+            <div style="margin-top: 20px; font-size: 12px; color: #555;">
                 <p>1 ucretsiz rapor ile baslayin</p>
-                <p>Pay-as-you-go | $3/rapor</p>
             </div>
 
-            <div class="footer" style="margin-top: 40px;">
-                <div class="footer-avatar">👨‍⚕️</div>
-                <div class="footer-name">Dr. İlhan Güngör Yücel</div>
-                <div class="footer-title">Kalp Damar Cerrahisi Uzmanı</div>
-                <div class="footer-contact">
-                    <a href="mailto:info@vascuscribe.com">info@vascuscribe.com</a>
-                </div>
-                <div class="footer-copy">
-                    © 2026 VascuScribe. Tüm hakları saklıdır.
-                </div>
-            </div>
+            <span class="back-link" onclick="showLanding()">← Ana Sayfaya Don</span>
         </div>
 
         <!-- KAYIT EKRANI -->
@@ -510,6 +782,8 @@
 
             <button class="btn btn-primary" onclick="register()">Kayit Ol</button>
             <button class="btn" style="background: #222; color: #888;" onclick="showLogin()">Zaten hesabim var</button>
+
+            <span class="back-link" onclick="showLanding()">← Ana Sayfaya Don</span>
         </div>
 
         <!-- ANA EKRAN -->
@@ -682,9 +956,18 @@
         }
 
         function showScreen(id) {
-            ['authScreen', 'registerScreen', 'mainScreen', 'paymentScreen'].forEach(sid => {
+            ['landingScreen', 'authScreen', 'registerScreen', 'mainScreen', 'paymentScreen'].forEach(sid => {
                 document.getElementById(sid).classList.toggle('hidden', sid !== id);
             });
+            window.scrollTo(0, 0);
+        }
+
+        function showLanding() {
+            showScreen('landingScreen');
+        }
+
+        function showAuth() {
+            showScreen('authScreen');
         }
 
         function showRegister() {
@@ -768,7 +1051,7 @@
             currentUser = null;
             localStorage.removeItem('vs_user');
             localStorage.removeItem('vs_token');
-            showScreen('authScreen');
+            showScreen('landingScreen');
         }
 
         async function checkStatus() {
@@ -1010,7 +1293,6 @@
             }
         }
 
-        // NEW: Sync subscription from Polar API
         async function syncSubscription() {
             showToast('Abonelik durumu kontrol ediliyor...', '');
 
@@ -1034,15 +1316,17 @@
             }
         }
 
-        // NEW: Dev test credits
         async function addTestCredits() {
             if (!confirm('TEST: Bu buton sadece gelistirme icindir. Kredi eklemek istiyor musunuz?')) return;
+
+            // Gelistirme ortaminda secret gerekmeyebilir, production'da DEV_SECRET gerekir
+            const secret = prompt('Gelistirme secret'i girin (bos birakin eger ayarlanmamissa):') || '';
 
             try {
                 const res = await fetch(`${API_URL}/dev-add-credits`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email: currentUser, plan: selectedPlan || 'mini' })
+                    body: JSON.stringify({ email: currentUser, plan: selectedPlan || 'mini', secret: secret })
                 });
 
                 const data = await res.json();
@@ -1066,7 +1350,7 @@
                 renderHistory();
                 checkStatus();
             } else {
-                showScreen('authScreen');
+                showScreen('landingScreen');
             }
         };
     </script>

@@ -2,5 +2,6 @@ User-agent: *
 Allow: /
 Disallow: /admin
 Disallow: /dev-add-credits
+Disallow: /sync-subscription
 
 Sitemap: https://vascuscribe.com/sitemap.xml
