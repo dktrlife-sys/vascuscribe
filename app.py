@@ -1,6 +1,6 @@
 """
 VascuScribe - Vascular Surgery Note Assistant
-Backend API v2.3 - Polar Sandbox Fix Edition
+Backend API v3.0 - PostgreSQL Edition
 ============================================
 """
 
@@ -20,10 +20,262 @@ from openai import OpenAI
 from jose import jwt, JWTError
 import bcrypt
 
+# ============ POSTGRESQL EKLENTISI ============
+import psycopg2
+import psycopg2.extras
+import psycopg2.pool
+
+# ============================================================
+# DATABASE YARDIMCI FONKSIYONLARI
+# ============================================================
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+_db_pool = None
+
+def get_db_pool():
+    global _db_pool
+    if _db_pool is None and DATABASE_URL:
+        _db_pool = psycopg2.pool.SimpleConnectionPool(1, 10, DATABASE_URL)
+    return _db_pool
+
+def get_db():
+    """Veritabani baglantisi al"""
+    pool = get_db_pool()
+    if pool:
+        return pool.getconn()
+    return None
+
+def release_db(conn):
+    """Veritabani baglantisini geri ver"""
+    pool = get_db_pool()
+    if pool and conn:
+        pool.putconn(conn)
+
+def init_db():
+    """Veritabanini baslat ve tablolari olustur"""
+    conn = get_db()
+    if not conn:
+        print("UYARI: DATABASE_URL ayarlanmamis, JSON moduna dusuyor")
+        return False
+
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                email VARCHAR(255) PRIMARY KEY,
+                credits INTEGER DEFAULT 0,
+                plan VARCHAR(50) DEFAULT 'trial',
+                plan_expires TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                ip VARCHAR(50),
+                password_hash VARCHAR(255)
+            )
+        """)
+        conn.commit()
+        cur.close()
+        print("✅ PostgreSQL tablolari olusturuldu")
+        return True
+    except Exception as e:
+        print(f"⚠️ Veritabani baslatma hatasi: {e}")
+        return False
+    finally:
+        release_db(conn)
+
+def db_get_user(email: str) -> dict:
+    """Kullanici bilgilerini veritabanindan al"""
+    conn = get_db()
+    if not conn:
+        return None
+    try:
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("SELECT * FROM users WHERE email = %s", (email,))
+        row = cur.fetchone()
+        cur.close()
+        if row:
+            return dict(row)
+        return None
+    except Exception as e:
+        print(f"DB get_user hatasi: {e}")
+        return None
+    finally:
+        release_db(conn)
+
+def db_create_user(email: str, password_hash: str = None, ip: str = None,
+                   credits: int = 1, plan: str = "trial", plan_expires = None) -> dict:
+    """Yeni kullanici olustur"""
+    conn = get_db()
+    if not conn:
+        return None
+    try:
+        cur = conn.cursor()
+        if plan_expires is None:
+            plan_expires = datetime.utcnow() + timedelta(days=7)
+
+        cur.execute("""
+            INSERT INTO users (email, password_hash, ip, credits, plan, plan_expires, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (email) DO NOTHING
+            RETURNING email
+        """, (email, password_hash, ip, credits, plan, plan_expires, datetime.utcnow()))
+        conn.commit()
+        cur.close()
+        return db_get_user(email)
+    except Exception as e:
+        print(f"DB create_user hatasi: {e}")
+        conn.rollback()
+        return None
+    finally:
+        release_db(conn)
+
+def db_update_user(email: str, **kwargs) -> bool:
+    """Kullanici bilgilerini guncelle"""
+    conn = get_db()
+    if not conn:
+        return False
+    try:
+        cur = conn.cursor()
+        fields = []
+        values = []
+        for key, val in kwargs.items():
+            fields.append(f"{key} = %s")
+            values.append(val)
+        values.append(email)
+
+        query = f"UPDATE users SET {', '.join(fields)} WHERE email = %s"
+        cur.execute(query, values)
+        conn.commit()
+        cur.close()
+        return True
+    except Exception as e:
+        print(f"DB update_user hatasi: {e}")
+        conn.rollback()
+        return False
+    finally:
+        release_db(conn)
+
+def db_get_all_users() -> list:
+    """Tum kullanicilari listele"""
+    conn = get_db()
+    if not conn:
+        return []
+    try:
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("SELECT * FROM users")
+        rows = cur.fetchall()
+        cur.close()
+        return [dict(r) for r in rows]
+    except Exception as e:
+        print(f"DB get_all_users hatasi: {e}")
+        return []
+    finally:
+        release_db(conn)
+
+# ============================================================
+# JSON YEDEK (PostgreSQL calismazsa)
+# ============================================================
+users_db = {}
+
+def save_users():
+    with open("users.json", "w") as f:
+        json.dump({"users": users_db}, f, indent=2)
+
+def load_users():
+    global users_db
+    try:
+        with open("users.json", "r") as f:
+            data = json.load(f)
+            users_db = data.get("users", {})
+    except (FileNotFoundError, json.JSONDecodeError):
+        users_db = {}
+
+# ============================================================
+# KARMA FONKSIYONLAR (DB varsa DB, yoksa JSON)
+# ============================================================
+_db_available = None
+
+def db_available() -> bool:
+    global _db_available
+    if _db_available is None:
+        _db_available = init_db()
+    return _db_available
+
+def get_user(email: str) -> dict:
+    """Kullanici getir - DB oncelikli"""
+    if db_available():
+        user = db_get_user(email)
+        if user:
+            # Timestamp donusumleri
+            if user.get('plan_expires'):
+                user['plan_expires'] = user['plan_expires'].timestamp() if isinstance(user['plan_expires'], datetime) else user['plan_expires']
+            if user.get('created_at'):
+                user['created_at'] = user['created_at'].timestamp() if isinstance(user['created_at'], datetime) else user['created_at']
+            return user
+    return users_db.get(email)
+
+def create_user(email: str, password_hash: str = None, ip: str = None,
+                credits: int = 1, plan: str = "trial", plan_expires = None) -> dict:
+    """Kullanici olustur - DB oncelikli"""
+    if plan_expires is None:
+        plan_expires = time.time() + (7 * 24 * 3600)
+
+    if db_available():
+        db_expires = datetime.fromtimestamp(plan_expires) if isinstance(plan_expires, (int, float)) else plan_expires
+        db_create_user(email, password_hash, ip, credits, plan, db_expires)
+
+    users_db[email] = {
+        "credits": credits,
+        "plan": plan,
+        "plan_expires": plan_expires,
+        "created_at": time.time(),
+        "ip": ip,
+        "password_hash": password_hash
+    }
+    save_users()
+    return users_db[email]
+
+def update_user(email: str, **kwargs) -> bool:
+    """Kullanici guncelle - DB oncelikli"""
+    if email in users_db:
+        users_db[email].update(kwargs)
+        save_users()
+
+    if db_available():
+        db_kwargs = {}
+        for k, v in kwargs.items():
+            if k == 'plan_expires' and isinstance(v, (int, float)):
+                db_kwargs[k] = datetime.fromtimestamp(v)
+            else:
+                db_kwargs[k] = v
+        return db_update_user(email, **db_kwargs)
+    return True
+
+def user_exists(email: str) -> bool:
+    if db_available():
+        return db_get_user(email) is not None
+    return email in users_db
+
+def get_all_users() -> dict:
+    if db_available():
+        db_users = db_get_all_users()
+        result = {}
+        for u in db_users:
+            email = u['email']
+            if u.get('plan_expires') and isinstance(u['plan_expires'], datetime):
+                u['plan_expires'] = u['plan_expires'].timestamp()
+            if u.get('created_at') and isinstance(u['created_at'], datetime):
+                u['created_at'] = u['created_at'].timestamp()
+            result[email] = u
+        return result
+    return users_db
+
+# ============================================================
+# SIFRE FONKSIYONLARI
+# ============================================================
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 def verify_password(password: str, hashed: str) -> bool:
+    if not hashed:
+        return False
     return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
 
 # ============================================================
@@ -123,21 +375,6 @@ POLAR_PRODUCTS = {
 # ============================================================
 # KOTA SISTEMI
 # ============================================================
-users_db = {}
-
-def save_users():
-    with open("users.json", "w") as f:
-        json.dump({"users": users_db}, f, indent=2)
-
-def load_users():
-    global users_db
-    try:
-        with open("users.json", "r") as f:
-            data = json.load(f)
-            users_db = data.get("users", {})
-    except (FileNotFoundError, json.JSONDecodeError):
-        users_db = {}
-
 load_users()
 
 PLANS = {
@@ -434,7 +671,6 @@ KDC_TEMPLATES = {
     }
 }
 
-
 # ============================================================
 # YARDIMCI FONKSIYONLAR
 # ============================================================
@@ -450,44 +686,42 @@ def detect_template(text: str) -> str:
 
 
 def get_or_create_user(email: str, ip: str = None) -> dict:
-    if email not in users_db:
+    user = get_user(email)
+    if not user:
+        # IP kontrolu
         if ip:
-            for other_email, other in users_db.items():
+            all_users = get_all_users()
+            for other_email, other in all_users.items():
                 if other.get("ip") == ip and other.get("plan") == "trial":
                     raise HTTPException(status_code=403, detail="Bu IP adresinden zaten bir hesap olusturulmus.")
 
-        users_db[email] = {
-            "credits": 1,
-            "plan": "trial",
-            "plan_expires": time.time() + (7 * 24 * 3600),
-            "created_at": time.time(),
-            "ip": ip
-        }
-        save_users()
-    return users_db[email]
+        create_user(email, ip=ip)
+        user = get_user(email)
+    return user
 
 
-def check_access(email: str, ip: str = None) -> tuple[bool, str]:
+def check_access(email: str, ip: str = None) -> tuple:
     user = get_or_create_user(email, ip)
 
-    if user["plan_expires"] and time.time() > user["plan_expires"]:
-        if user["plan"] != "trial":
-            user["credits"] = 0
-            user["plan"] = "expired"
+    plan_expires = user.get("plan_expires")
+    if plan_expires and time.time() > plan_expires:
+        if user.get("plan") != "trial":
+            update_user(email, credits=0, plan="expired")
+            user = get_user(email)
 
-    if ip and user["plan"] == "trial" and user["credits"] > 0:
-        for other_email, other in users_db.items():
+    if ip and user.get("plan") == "trial" and user.get("credits", 0) > 0:
+        all_users = get_all_users()
+        for other_email, other in all_users.items():
             if other_email != email and other.get("ip") == ip:
                 if other.get("plan") == "trial":
                     return False, "duplicate_ip"
 
-    if user["credits"] > 0:
-        return True, user["plan"]
+    if user.get("credits", 0) > 0:
+        return True, user.get("plan", "trial")
     return False, "expired"
 
-
 # ============================================================
-# API MODELLERI - FIXED
+# API MODELLERI
 # ============================================================
 
 class ReportRequest(BaseModel):
@@ -498,7 +732,7 @@ class ReportRequest(BaseModel):
 
 
 class PolarCheckoutRequest(BaseModel):
-    email: str  # <-- FIXED: email eklendi
+    email: str
     plan: str = "mini"
     success_url: str = "https://vascuscribe.com/success"
     return_url: str = "https://vascuscribe.com/pricing"
@@ -525,54 +759,48 @@ class RegisterRequest(BaseModel):
 @app.post("/register")
 async def register(req: RegisterRequest):
     """Yeni kullanici kaydi"""
-    if req.email in users_db and users_db[req.email].get("password_hash"):
+    existing = get_user(req.email)
+    if existing and existing.get("password_hash"):
         raise HTTPException(status_code=400, detail="Bu e-posta zaten kayitli")
 
     password_hash = hash_password(req.password)
 
-    if req.email not in users_db:
-        users_db[req.email] = {
-            "credits": 1,
-            "plan": "trial",
-            "plan_expires": time.time() + (7 * 24 * 3600),
-            "created_at": time.time(),
-            "ip": None,
-            "password_hash": password_hash
-        }
+    if not existing:
+        create_user(req.email, password_hash=password_hash, credits=1, plan="trial",
+                   plan_expires=time.time() + (7 * 24 * 3600))
     else:
-        users_db[req.email]["password_hash"] = password_hash
+        update_user(req.email, password_hash=password_hash)
 
-    save_users()
     token = create_access_token({"sub": req.email})
+    user = get_user(req.email)
 
     return {
         "success": True,
         "email": req.email,
         "token": token,
-        "credits": users_db[req.email]["credits"],
-        "plan": users_db[req.email]["plan"]
+        "credits": user.get("credits", 0),
+        "plan": user.get("plan", "trial")
     }
 
 
 @app.post("/login")
 async def login(req: LoginRequest):
     """Kullanici girisi - JWT token doner"""
-    if req.email not in users_db:
+    user = get_user(req.email)
+    if not user:
         raise HTTPException(status_code=401, detail="Kullanici bulunamadi")
-
-    user = users_db[req.email]
 
     if not user.get("password_hash"):
         raise HTTPException(status_code=401, detail="Sifre ayarlanmamis, once kayit olun")
 
-    if not verify_password(req.password, user["password_hash"]):
+    if not verify_password(req.password, user.get("password_hash", "")):
         raise HTTPException(status_code=401, detail="Hatali sifre")
 
-    if user["plan_expires"] and time.time() > user["plan_expires"]:
-        if user["plan"] != "trial":
-            user["credits"] = 0
-            user["plan"] = "expired"
-            save_users()
+    plan_expires = user.get("plan_expires")
+    if plan_expires and time.time() > plan_expires:
+        if user.get("plan") != "trial":
+            update_user(req.email, credits=0, plan="expired")
+            user = get_user(req.email)
 
     token = create_access_token({"sub": req.email})
 
@@ -580,32 +808,31 @@ async def login(req: LoginRequest):
         "success": True,
         "email": req.email,
         "token": token,
-        "credits": user["credits"],
-        "plan": user["plan"],
-        "expires": user["plan_expires"]
+        "credits": user.get("credits", 0),
+        "plan": user.get("plan", "trial"),
+        "expires": user.get("plan_expires")
     }
 
 
 @app.get("/me")
 async def me(email: str = Depends(verify_token)):
     """Token ile kullanici bilgisi"""
-    if email not in users_db:
+    user = get_user(email)
+    if not user:
         raise HTTPException(status_code=404, detail="Kullanici bulunamadi")
 
-    user = users_db[email]
-
-    if user["plan_expires"] and time.time() > user["plan_expires"]:
-        if user["plan"] != "trial":
-            user["credits"] = 0
-            user["plan"] = "expired"
-            save_users()
+    plan_expires = user.get("plan_expires")
+    if plan_expires and time.time() > plan_expires:
+        if user.get("plan") != "trial":
+            update_user(email, credits=0, plan="expired")
+            user = get_user(email)
 
     return {
         "email": email,
-        "credits": user["credits"],
-        "plan": user["plan"],
-        "expires": user["plan_expires"],
-        "can_use": user["credits"] > 0
+        "credits": user.get("credits", 0),
+        "plan": user.get("plan", "trial"),
+        "expires": user.get("plan_expires"),
+        "can_use": user.get("credits", 0) > 0
     }
 
 
@@ -641,14 +868,14 @@ async def transcribe_audio(
                 language="tr"
             )
 
-        user = users_db[email]
-        user["credits"] -= 1
-        save_users()
+        user = get_user(email)
+        new_credits = max(0, user.get("credits", 0) - 1)
+        update_user(email, credits=new_credits)
 
         return {
             "text": result.text,
-            "credits_remaining": user["credits"],
-            "plan": user["plan"]
+            "credits_remaining": new_credits,
+            "plan": user.get("plan", "trial")
         }
 
     except Exception as e:
@@ -677,6 +904,15 @@ async def generate_report(req: ReportRequest, request: Request):
         for k, v in KDC_TEMPLATES.items():
             sablonlar += f"\n{k}: {v['name']}\n{v['template']}\n"
 
+        # DIL AYARI - KRITIK DUZELTME
+        lang_instruction = req.language
+        if req.language.lower() in ["turkish", "turkce", "türkçe", "tr"]:
+            lang_instruction = "Turkish"
+            output_lang = "Turkish"
+        else:
+            lang_instruction = "English"
+            output_lang = "English"
+
         sys_prompt = (
             "You are a senior Cardiovascular Surgery professor. Analyze the user's "
             "dictated operation notes and generate a standard epicrisis report.\n\n"
@@ -691,9 +927,10 @@ async def generate_report(req: ReportRequest, request: Request):
             "RULES:\n"
             "- NEVER REMOVE durations, vessel names (LAD, CX, RCA, LIMA, SVG), graft counts\n"
             "- Preserve template structure, only update variable fields\n"
-            "- CRITICAL: The entire response MUST be in " + req.language + " language\n"
-            "- Do NOT use English words unless they are medical terms (e.g., LAD, LIMA, SVG)\n"
-            "- Use formal, professional medical epicrisis style in " + req.language + "\n"
+            "- CRITICAL: The ENTIRE response MUST be written COMPLETELY in " + output_lang + " language ONLY\n"
+            "- Do NOT use English words unless they are universal medical abbreviations (e.g., LAD, LIMA, SVG, CPB, AVR, MVR, CABG)\n"
+            "- Do NOT mix languages - output must be 100% " + output_lang + "\n"
+            "- Use formal, professional medical epicrisis style\n"
             "OUTPUT: Return only the epicrisis text, no explanations."
         )
 
@@ -709,15 +946,15 @@ async def generate_report(req: ReportRequest, request: Request):
 
         report = response.choices[0].message.content.strip()
 
-        user = users_db[req.email]
-        user["credits"] -= 1
-        save_users()
+        user = get_user(req.email)
+        new_credits = max(0, user.get("credits", 0) - 1)
+        update_user(req.email, credits=new_credits)
 
         return {
             "report": report,
             "template_used": KDC_TEMPLATES.get(template, {}).get("name", template),
-            "credits_remaining": user["credits"],
-            "plan": user["plan"]
+            "credits_remaining": new_credits,
+            "plan": user.get("plan", "trial")
         }
 
     except Exception as e:
@@ -729,19 +966,19 @@ async def user_status(email: str, request: Request):
     client_ip = request.client.host
     user = get_or_create_user(email, ip=client_ip)
 
-    if user["plan_expires"] and time.time() > user["plan_expires"]:
-        if user["plan"] != "trial":
-            user["credits"] = 0
-            user["plan"] = "expired"
+    plan_expires = user.get("plan_expires")
+    if plan_expires and time.time() > plan_expires:
+        if user.get("plan") != "trial":
+            update_user(email, credits=0, plan="expired")
+            user = get_user(email)
 
     return {
         "email": email,
-        "credits": user["credits"],
-        "plan": user["plan"],
-        "expires": user["plan_expires"],
-        "can_use": user["credits"] > 0
+        "credits": user.get("credits", 0),
+        "plan": user.get("plan", "trial"),
+        "expires": user.get("plan_expires"),
+        "can_use": user.get("credits", 0) > 0
     }
-
 
 # ============================================================
 # POLAR CHECKOUT - ROBUST VERSION WITH FALLBACK
@@ -838,7 +1075,7 @@ async def sync_subscription(request: Request):
     data = await request.json()
     email = data.get("email")
 
-    if not email or email not in users_db:
+    if not email or not get_user(email):
         raise HTTPException(status_code=404, detail="Kullanici bulunamadi")
 
     if not polar_client:
@@ -891,12 +1128,12 @@ async def sync_subscription(request: Request):
 
             if has_active and plan_name:
                 plan_config = PLANS[plan_name]
-                user = users_db[email]
-                user["credits"] = plan_config["credits"]
-                user["plan"] = plan_name
-                user["plan_expires"] = time.time() + (plan_config["days"] * 24 * 3600)
-                user["polar_customer_id"] = customer_id
-                save_users()
+                update_user(email,
+                    credits=plan_config["credits"],
+                    plan=plan_name,
+                    plan_expires=time.time() + (plan_config["days"] * 24 * 3600),
+                    polar_customer_id=customer_id
+                )
 
                 return {
                     "synced": True,
@@ -917,36 +1154,45 @@ async def sync_subscription(request: Request):
 
 
 # ============================================================
-# DEV ONLY: Test credits endpoint (remove in production)
+# DEV ONLY: Test credits endpoint (KORUMALI)
 # ============================================================
+
+DEV_SECRET = os.getenv("DEV_SECRET", "")
 
 @app.post("/dev-add-credits")
 async def dev_add_credits(request: Request):
     """
     SADECE GELISTIRME ICIN: Test kredisi ekler.
-    Production'da kaldirilmalidir!
+    Production'da DEV_SECRET environment variable'i olmalidir.
     """
     data = await request.json()
     email = data.get("email")
     plan = data.get("plan", "mini")
+    secret = data.get("secret", "")
 
-    if not email or email not in users_db:
+    # Guvenlik kontrolu
+    if DEV_SECRET and secret != DEV_SECRET:
+        raise HTTPException(status_code=403, detail="Yetkisiz erisim")
+
+    if not email or not get_user(email):
         raise HTTPException(status_code=404, detail="Kullanici bulunamadi")
 
     if plan not in PLANS:
         raise HTTPException(status_code=400, detail="Gecersiz plan")
 
     plan_config = PLANS[plan]
-    user = users_db[email]
-    user["credits"] += plan_config["credits"]
-    user["plan"] = plan
-    user["plan_expires"] = time.time() + (plan_config["days"] * 24 * 3600)
-    save_users()
+    user = get_user(email)
+    new_credits = user.get("credits", 0) + plan_config["credits"]
+    update_user(email,
+        credits=new_credits,
+        plan=plan,
+        plan_expires=time.time() + (plan_config["days"] * 24 * 3600)
+    )
 
     return {
         "success": True,
-        "credits": user["credits"],
-        "plan": user["plan"],
+        "credits": new_credits,
+        "plan": plan,
         "message": f"TEST: {plan_config['credits']} kredi eklendi"
     }
 
@@ -956,10 +1202,10 @@ async def customer_portal(req: CustomerPortalRequest):
     if not polar_client:
         raise HTTPException(status_code=500, detail="Polar yapilandirma hatasi")
 
-    if not req.email or req.email not in users_db:
+    if not req.email or not get_user(req.email):
         raise HTTPException(status_code=404, detail="Kullanici bulunamadi")
 
-    user = users_db[req.email]
+    user = get_user(req.email)
     polar_customer_id = user.get("polar_customer_id")
 
     if not polar_customer_id:
@@ -1030,29 +1276,31 @@ async def polar_webhook(request: Request):
         if email and plan in PLANS:
             plan_config = PLANS[plan]
             user = get_or_create_user(email)
-            user["credits"] += plan_config["credits"]
-            user["plan"] = plan
-            user["plan_expires"] = time.time() + (plan_config["days"] * 24 * 3600)
-            user["polar_subscription_id"] = str(data.id) if hasattr(data, 'id') else None
-            user["polar_customer_id"] = str(data.customer_id) if hasattr(data, 'customer_id') else None
-            save_users()
+            new_credits = user.get("credits", 0) + plan_config["credits"]
+            update_user(email,
+                credits=new_credits,
+                plan=plan,
+                plan_expires=time.time() + (plan_config["days"] * 24 * 3600),
+                polar_subscription_id=str(data.id) if hasattr(data, 'id') else None,
+                polar_customer_id=str(data.customer_id) if hasattr(data, 'customer_id') else None
+            )
             print(f"✅ Subscription activated/updated: {email} -> {plan}")
 
     elif event_type in ["subscription.revoked", "subscription.canceled"]:
-        if email and email in users_db:
-            users_db[email]["plan"] = "expired"
-            users_db[email]["credits"] = 0
-            save_users()
+        if email and get_user(email):
+            update_user(email, plan="expired", credits=0)
             print(f"❌ Subscription revoked: {email}")
 
     elif event_type in ["order.paid", "checkout.completed"]:
         if email and plan in PLANS:
             plan_config = PLANS[plan]
             user = get_or_create_user(email)
-            user["credits"] += plan_config["credits"]
-            user["plan"] = plan
-            user["plan_expires"] = time.time() + (plan_config["days"] * 24 * 3600)
-            save_users()
+            new_credits = user.get("credits", 0) + plan_config["credits"]
+            update_user(email,
+                credits=new_credits,
+                plan=plan,
+                plan_expires=time.time() + (plan_config["days"] * 24 * 3600)
+            )
             print(f"💰 Order paid: {email} -> {plan}")
 
     return {"status": "success"}
@@ -1127,6 +1375,50 @@ async def create_checkout_legacy(req: Request):
 
 
 # ============================================================
+# ADMIN ENDPOINTLERI (Kullanici yonetimi)
+# ============================================================
+
+ADMIN_KEY = os.getenv("ADMIN_KEY", "")
+
+@app.get("/admin/users")
+async def admin_users(key: str = Header(None, alias="X-Admin-Key")):
+    """Tum kullanicilari listele (admin icin)"""
+    if not ADMIN_KEY or key != ADMIN_KEY:
+        raise HTTPException(status_code=403, detail="Yetkisiz erisim")
+
+    users = get_all_users()
+    return {
+        "count": len(users),
+        "users": users
+    }
+
+
+@app.post("/admin/add-credits")
+async def admin_add_credits(request: Request, key: str = Header(None, alias="X-Admin-Key")):
+    """Admin: Kullaniciya kredi ekle"""
+    if not ADMIN_KEY or key != ADMIN_KEY:
+        raise HTTPException(status_code=403, detail="Yetkisiz erisim")
+
+    data = await request.json()
+    email = data.get("email")
+    credits = data.get("credits", 0)
+
+    if not email or not get_user(email):
+        raise HTTPException(status_code=404, detail="Kullanici bulunamadi")
+
+    user = get_user(email)
+    new_credits = user.get("credits", 0) + credits
+    update_user(email, credits=new_credits)
+
+    return {
+        "success": True,
+        "email": email,
+        "credits": new_credits,
+        "message": f"{credits} kredi eklendi. Yeni bakiye: {new_credits}"
+    }
+
+
+# ============================================================
 # ROOT ENDPOINT - index.html servis et
 # ============================================================
 
@@ -1193,7 +1485,6 @@ async def success(email: str = None):
     </body>
     </html>
     """)
-
 
 
 @app.get("/robots.txt", response_class=FileResponse)
