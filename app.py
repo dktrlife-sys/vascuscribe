@@ -21,9 +21,9 @@ from jose import jwt, JWTError
 import bcrypt
 
 # ============ POSTGRESQL EKLENTISI ============
-import psycopg2
-import psycopg2.extras
-import psycopg2.pool
+import psycopg
+from psycopg.rows import dict_row
+from psycopg_pool import ConnectionPool
 
 # ============================================================
 # DATABASE YARDIMCI FONKSIYONLARI
@@ -34,7 +34,7 @@ _db_pool = None
 def get_db_pool():
     global _db_pool
     if _db_pool is None and DATABASE_URL:
-        _db_pool = psycopg2.pool.SimpleConnectionPool(1, 10, DATABASE_URL)
+        _db_pool = ConnectionPool("postgresql://" + DATABASE_URL.replace("postgresql://", ""), min_size=1, max_size=10)
     return _db_pool
 
 def get_db():
@@ -86,7 +86,7 @@ def db_get_user(email: str) -> dict:
     if not conn:
         return None
     try:
-        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur = conn.cursor(row_factory=dict_row)
         cur.execute("SELECT * FROM users WHERE email = %s", (email,))
         row = cur.fetchone()
         cur.close()
@@ -158,7 +158,7 @@ def db_get_all_users() -> list:
     if not conn:
         return []
     try:
-        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur = conn.cursor(row_factory=dict_row)
         cur.execute("SELECT * FROM users")
         rows = cur.fetchall()
         cur.close()
