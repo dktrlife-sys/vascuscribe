@@ -1195,6 +1195,15 @@ async def success(email: str = None):
     """)
 
 
+
+@app.get("/robots.txt", response_class=FileResponse)
+async def robots_txt():
+    return FileResponse("static/robots.txt")
+
+@app.get("/sitemap.xml", response_class=FileResponse)
+async def sitemap_xml():
+    return FileResponse("static/sitemap.xml")
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
