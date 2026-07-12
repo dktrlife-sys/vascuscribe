@@ -860,13 +860,11 @@ async def transcribe_audio(
                 language="tr"
             )
 
+        # Kredi düşürme - sadece generate'de düşürülüyor
         user = get_user(email)
-        new_credits = max(0, user.get("credits", 0) - 1)
-        update_user(email, credits=new_credits)
-
         return {
             "text": result.text,
-            "credits_remaining": new_credits,
+            "credits_remaining": user.get("credits", 0),
             "plan": user.get("plan", "trial")
         }
 
