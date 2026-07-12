@@ -846,6 +846,24 @@ async def register(req: RegisterRequest):
     if not req.email or "@" not in req.email or "." not in req.email.split("@")[-1]:
         raise HTTPException(status_code=400, detail="Gecerli bir e-posta adresi girin")
 
+    # Tek kullanimlik email domain kontrolu
+    BLOCKED_DOMAINS = {
+        "temp-mail.org", "tempmail.com", "10minutemail.com", "guerrillamail.com",
+        "throwawaymail.com", "mailinator.com", "yopmail.com", "getairmail.com",
+        "tempail.com", "fakeemail.net", "sharklasers.com", "getnada.com",
+        "burnermail.io", "tempmailbox.net", "mail.tm", "mail.gw",
+        "tmpmail.org", "disposablemail.com", "emailondeck.com", "tempinbox.com",
+        "mailnesia.com", "tempmailaddress.com", "burner.kiwi", "trashmail.com",
+        "mytemp.email", "spamgourmet.com", "maildrop.cc", "harakirimail.com",
+        "mailcatch.com", "fakeinbox.com", "gettempmail.com", "tempm.com",
+        "tempmailo.com", "tempmails.info", "temp-mail.io", "tmails.net",
+        "test.com", "example.com", "localhost.com", "invalid.com"
+    }
+
+    domain = req.email.split("@")[-1].lower()
+    if domain in BLOCKED_DOMAINS:
+        raise HTTPException(status_code=400, detail="Gecerli bir e-posta adresi kullanın. Tek kullanimlik mailler kabul edilmez.")
+
     # Şifre güçlülüğü
     if len(req.password) < 6:
         raise HTTPException(status_code=400, detail="Sifre en az 6 karakter olmalidir")
@@ -1207,15 +1225,10 @@ async def create_checkout(req: PolarCheckoutRequest):
         # Create customer if not found
         if not customer:
             try:
-                create_req = {
+                customer = polar_client.customers.create(request={
                     "email": req.email,
                     "external_id": req.email,
-                }
-                # Try with type field (newer SDK versions)
-                try:
-                    customer = polar_client.customers.create(request={**create_req, "type": "individual"})
-                except Exception:
-                    customer = polar_client.customers.create(request=create_req)
+                })
             except Exception as e:
                 print(f"Customer create error: {e}")
                 raise HTTPException(status_code=500, detail=f"Musteri olusturulamadi: {str(e)}")
@@ -1571,11 +1584,10 @@ async def create_checkout_legacy(req: Request):
 
         if not customer:
             try:
-                create_req = {"email": email, "external_id": email}
-                try:
-                    customer = polar_client.customers.create(request={**create_req, "type": "individual"})
-                except Exception:
-                    customer = polar_client.customers.create(request=create_req)
+                customer = polar_client.customers.create(request={
+                    "email": email,
+                    "external_id": email,
+                })
             except Exception as e:
                 raise HTTPException(status_code=500, detail=f"Musteri olusturulamadi: {str(e)}")
 
