@@ -813,6 +813,8 @@
 <base target="_blank">
 <base target="_blank">
 <base target="_blank">
+<base target="_blank">
+<base target="_blank">
 </head>
 <body>
     <div class="container">
@@ -1227,7 +1229,7 @@
         }
 
         function showScreen(id) {
-            ['landingScreen', 'authScreen', 'registerScreen', 'mainScreen', 'paymentScreen'].forEach(sid => {
+            ['landingScreen', 'authScreen', 'registerScreen', 'forgotScreen', 'mainScreen', 'paymentScreen'].forEach(sid => {
                 document.getElementById(sid).classList.toggle('hidden', sid !== id);
             });
             window.scrollTo(0, 0);
@@ -1547,10 +1549,15 @@
             }
 
             try {
-                const res = await fetch(`${API_URL}/create-checkout-session`, {
+                const res = await fetch(`${API_URL}/create-checkout`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email: currentUser, plan: selectedPlan })
+                    body: JSON.stringify({
+                        email: currentUser,
+                        plan: selectedPlan,
+                        success_url: "https://vascuscribe.com/success",
+                        return_url: "https://vascuscribe.com/pricing"
+                    })
                 });
 
                 const data = await res.json();

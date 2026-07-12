@@ -12,7 +12,7 @@ import traceback
 from datetime import datetime, timedelta
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel
 from openai import OpenAI
 
@@ -356,6 +356,46 @@ if not OPENAI_KEY:
     print("UYARI: OPENAI_API_KEY ayarlanmamis!")
 
 client = OpenAI(api_key=OPENAI_KEY)
+
+# ============================================================
+# RESEND EMAIL ENTEGRASYONU
+# ============================================================
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
+RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "noreply@vascuscribe.com")
+
+def send_email(to_email: str, subject: str, html_content: str) -> bool:
+    """Resend ile email gonder"""
+    if not RESEND_API_KEY:
+        print(f"UYARI: RESEND_API_KEY ayarlanmamis, email gonderilemedi: {subject}")
+        return False
+
+    try:
+        import requests
+        res = requests.post(
+            "https://api.resend.com/emails",
+            headers={
+                "Authorization": f"Bearer {RESEND_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "from": RESEND_FROM_EMAIL,
+                "to": [to_email],
+                "subject": subject,
+                "html": html_content
+            },
+            timeout=10
+        )
+        if res.status_code == 200:
+            print(f"Email gonderildi: {to_email} - {subject}")
+            return True
+        else:
+            print(f"Email hatasi: {res.status_code} - {res.text}")
+            return False
+    except Exception as e:
+        print(f"Email gonderim hatasi: {e}")
+        return False
+
+
 
 # ============ JWT AYARLARI ============
 JWT_SECRET = os.getenv("JWT_SECRET", "vascuscribe-secret-key-change-in-production")
@@ -852,12 +892,12 @@ async def login(req: LoginRequest):
 
 
 # ============================================================
-# ŞİFRE SIFIRLAMA
+# SIFRE SIFIRLAMA - RESEND EMAIL ILE
 # ============================================================
 import secrets
 import string
 
-# Basit in-memory reset kodları (production'da Redis/DB kullanın)
+# Basit in-memory reset kodlari (production'da Redis/DB kullanin)
 reset_codes = {}  # {email: {"code": "123456", "expires": timestamp}}
 
 class ResetRequest(BaseModel):
@@ -870,27 +910,50 @@ class ResetConfirmRequest(BaseModel):
 
 @app.post("/forgot-password")
 async def forgot_password(req: ResetRequest):
-    """Şifre sıfırlama kodu gönder"""
+    """Sifre sifirlama kodu gonder"""
     user = get_user(req.email)
     if not user:
-        # Güvenlik için kullanıcı yoksa bile aynı mesaj
+        # Guvenlik icin kullanici yoksa bile ayni mesaj
         return {"success": True, "message": "E-posta adresinize sifirlama kodu gonderildi"}
 
-    # 6 haneli kod üret
+    # 6 haneli kod uret
     code = ''.join(secrets.choice(string.digits) for _ in range(6))
     reset_codes[req.email] = {
         "code": code,
-        "expires": time.time() + 600  # 10 dakika geçerli
+        "expires": time.time() + 600  # 10 dakika gecerli
     }
 
-    # Log'a yaz (gerçekte email gönderilmeli)
-    print(f"SIFIRLAMA KODU {req.email}: {code}")
+    # Email gonder
+    email_sent = send_email(
+        to_email=req.email,
+        subject="VascuScribe - Sifre Sifirlama Kodu",
+        html_content=f"""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #20e3b2;">VascuScribe Sifre Sifirlama</h2>
+            <p>Sifre sifirlama talebiniz alindi.</p>
+            <p style="font-size: 24px; font-weight: bold; letter-spacing: 4px; 
+                      background: #f0f0f0; padding: 15px; text-align: center; 
+                      border-radius: 8px; margin: 20px 0;">
+                {code}
+            </p>
+            <p>Bu kod 10 dakika gecerlidir.</p>
+            <p style="color: #888; font-size: 12px;">
+                Bu talebi siz yapmadıysanız, lütfen bu e-postayı dikkate almayın.
+            </p>
+        </div>
+        """
+    )
 
-    return {"success": True, "message": "E-posta adresinize sifirlama kodu gonderildi"}
+    if email_sent:
+        return {"success": True, "message": "E-posta adresinize sifirlama kodu gonderildi"}
+    else:
+        # Email gonderilemediyse log'a yaz ama kullaniciya gosterme (guvenlik)
+        print(f"SIFIRLAMA KODU {req.email}: {code}")
+        return {"success": True, "message": "E-posta adresinize sifirlama kodu gonderildi (Email servisi gecici olarak calismiyor, lutfen destek ile iletisime gecin)"}
 
 @app.post("/reset-password")
 async def reset_password(req: ResetConfirmRequest):
-    """Yeni şifre ile sıfırla"""
+    """Yeni sifre ile sifirla"""
     reset_data = reset_codes.get(req.email)
 
     if not reset_data:
@@ -906,15 +969,27 @@ async def reset_password(req: ResetConfirmRequest):
     if len(req.new_password) < 6:
         raise HTTPException(status_code=400, detail="Sifre en az 6 karakter olmalidir")
 
-    # Şifreyi güncelle
+    # Sifreyi guncelle
     password_hash = hash_password(req.new_password)
     update_user(req.email, password_hash=password_hash)
 
     # Kodu temizle
     del reset_codes[req.email]
 
-    return {"success": True, "message": "Sifreniz basariyla degistirildi"}
+    # Basarili emaili gonder
+    send_email(
+        to_email=req.email,
+        subject="VascuScribe - Sifreniz Degistirildi",
+        html_content="""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #20e3b2;">Sifre Degistirildi</h2>
+            <p>Sifreniz basariyla degistirildi.</p>
+            <p>Eger bu islemi siz yapmadıysanız, lütfen hemen destek ile iletisime gecin.</p>
+        </div>
+        """
+    )
 
+    return {"success": True, "message": "Sifreniz basariyla degistirildi"}
 
 @app.get("/me")
 async def me(email: str = Depends(verify_token)):
@@ -1630,3 +1705,39 @@ async def sitemap_xml():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+# ============================================================
+# GOOGLE OAUTH - Ileride Eklenecek (Opsiyonel)
+# ============================================================
+# Adimlar:
+# 1. Google Cloud Console -> APIs & Services -> Credentials
+# 2. OAuth 2.0 Client ID olustur (Web application)
+# 3. Authorized redirect URIs: https://vascuscribe.com/auth/google/callback
+# 4. Client ID ve Secret'i .env'ye ekle
+# 5. Asagidaki endpoint'leri aktif et
+# ============================================================
+
+# from authlib.integrations.starlette_client import OAuth
+# oauth = OAuth()
+# oauth.register(
+#     name='google',
+#     client_id=os.getenv('GOOGLE_CLIENT_ID'),
+#     client_secret=os.getenv('GOOGLE_CLIENT_SECRET'),
+#     server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+#     client_kwargs={'scope': 'openid email profile'}
+# )
+
+# @app.get("/auth/google")
+# async def google_login(request: Request):
+#     redirect_uri = "https://vascuscribe.com/auth/google/callback"
+#     return await oauth.google.authorize_redirect(request, redirect_uri)
+
+# @app.get("/auth/google/callback")
+# async def google_callback(request: Request):
+#     token = await oauth.google.authorize_access_token(request)
+#     user_info = token.get('userinfo')
+#     email = user_info.get('email')
+#     # Kullanici yoksa olustur, varsa giris yap
+#     user = get_or_create_user(email)
+#     jwt_token = create_access_token({"sub": email})
+#     return {"token": jwt_token, "email": email}
