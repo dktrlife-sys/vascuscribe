@@ -790,7 +790,15 @@ def get_or_create_user(email: str, ip: str = None) -> dict:
 def check_access(email: str, ip: str = None) -> tuple:
     user = get_or_create_user(email, ip)
 
-    # Kredi var mı kontrol et (süre sınırı yok)
+    # Trial kullanıcıları için süre kontrolü
+    if user.get("plan") == "trial":
+        plan_expires = user.get("plan_expires")
+        if plan_expires and isinstance(plan_expires, (int, float)):
+            if time.time() > plan_expires:
+                # Trial süresi doldu, kredi varsa bile engelle
+                return False, "trial_expired"
+
+    # Kredi var mı kontrol et
     if user.get("credits", 0) > 0:
         return True, user.get("plan", "trial")
     return False, "expired"
@@ -1023,6 +1031,8 @@ async def transcribe_audio(
     client_ip = request.client.host
     allowed, status = check_access(email, ip=client_ip)
     if not allowed:
+        if status == "trial_expired":
+            raise HTTPException(status_code=403, detail="trial_expired")
         raise HTTPException(status_code=403, detail="Kota doldu veya IP limiti asildi.")
 
     if not OPENAI_KEY:
@@ -1066,6 +1076,8 @@ async def generate_report(req: ReportRequest, request: Request):
     client_ip = request.client.host
     allowed, status = check_access(req.email, ip=client_ip)
     if not allowed:
+        if status == "trial_expired":
+            raise HTTPException(status_code=403, detail="trial_expired")
         raise HTTPException(status_code=403, detail="Kota doldu veya IP limiti asildi.")
 
     if not OPENAI_KEY:
@@ -1142,11 +1154,21 @@ async def user_status(email: str, request: Request):
     client_ip = request.client.host
     user = get_or_create_user(email, ip=client_ip)
 
+    # Trial süresi kontrolü
+    is_trial_expired = False
+    if user.get("plan") == "trial":
+        plan_expires = user.get("plan_expires")
+        if plan_expires and isinstance(plan_expires, (int, float)):
+            if time.time() > plan_expires:
+                is_trial_expired = True
+
     return {
         "email": email,
         "credits": user.get("credits", 0),
         "plan": user.get("plan", "trial"),
-        "can_use": user.get("credits", 0) > 0
+        "can_use": user.get("credits", 0) > 0 and not is_trial_expired,
+        "trial_expired": is_trial_expired,
+        "plan_expires": user.get("plan_expires")
     }
 
 # ============================================================

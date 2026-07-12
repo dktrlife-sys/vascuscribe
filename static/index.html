@@ -800,9 +800,7 @@
             font-size: 10px;
         }
 </style>
-<base target="_blank">
-
-    <!-- Google tag (gtag.js) -->
+<!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-PNSDK0P6WC"></script>
     <script>
         window.dataLayer = window.dataLayer || [];
@@ -810,10 +808,7 @@
         gtag('js', new Date());
         gtag('config', 'G-PNSDK0P6WC');
     </script>
-<base target="_blank">
-<base target="_blank">
-<base target="_blank">
-<base target="_blank">
+    <base target="_blank">
 <base target="_blank">
 </head>
 <body>
@@ -1336,6 +1331,14 @@
 
                 const badge = document.getElementById('quotaBadge');
 
+                // Trial süresi dolmuş mu kontrol et
+                if (data.trial_expired) {
+                    badge.className = 'badge badge-expired';
+                    badge.textContent = 'Deneme süreniz doldu - Kredi satın alın';
+                    showScreen('paymentScreen');
+                    return;
+                }
+
                 if (data.credits > 0) {
                     if (data.plan !== 'trial' && data.plan !== 'expired') {
                         badge.className = 'badge badge-premium';
@@ -1417,6 +1420,9 @@
                     checkStatus();
                 } else {
                     if (res.status === 403) {
+                        if (data.detail === "trial_expired") {
+                            showToast('Deneme süreniz doldu! Lütfen kredi satın alın.', 'error');
+                        }
                         showScreen('paymentScreen');
                     } else {
                         throw new Error(data.detail);
@@ -1478,6 +1484,9 @@
                     }
                 } else {
                     if (res.status === 403) {
+                        if (data.detail === "trial_expired") {
+                            showToast('Deneme süreniz doldu! Lütfen kredi satın alın.', 'error');
+                        }
                         showScreen('paymentScreen');
                     } else {
                         throw new Error(data.detail);
