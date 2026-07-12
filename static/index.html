@@ -1217,7 +1217,7 @@
         let isRecording = false;
         let mediaRecorder = null;
         let audioChunks = [];
-        let reports = JSON.parse(localStorage.getItem('vs_reports') || '[]');
+        let reports = JSON.parse(localStorage.getItem('vs_reports_' + currentUser) || '[]');
         let selectedPlan = null;
 
         function showToast(msg, type = '') {
@@ -1466,9 +1466,16 @@
                         time: new Date().toLocaleString('tr-TR'),
                         type: data.template_used
                     });
-                    localStorage.setItem('vs_reports', JSON.stringify(reports));
+                    localStorage.setItem('vs_reports_' + currentUser, JSON.stringify(reports));
                     renderHistory();
-                    checkStatus();
+                    // Kredi badge'ini güncelle ama ekran değiştirme
+                    const badge = document.getElementById('quotaBadge');
+                    if (data.credits_remaining > 0) {
+                        badge.textContent = `Kalan Rapor: ${data.credits_remaining}`;
+                    } else {
+                        badge.className = 'badge badge-expired';
+                        badge.textContent = 'Kota Doldu - Yeni rapor icin kredi satin alin';
+                    }
                 } else {
                     if (res.status === 403) {
                         showScreen('paymentScreen');
@@ -1531,7 +1538,7 @@
 
         function deleteReport(i) {
             reports.splice(i, 1);
-            localStorage.setItem('vs_reports', JSON.stringify(reports));
+            localStorage.setItem('vs_reports_' + currentUser, JSON.stringify(reports));
             renderHistory();
             showToast('Rapor silindi', 'success');
         }
@@ -1664,6 +1671,7 @@
             if (saved) {
                 currentUser = saved;
                 document.getElementById('authEmail').value = saved;
+                reports = JSON.parse(localStorage.getItem('vs_reports_' + currentUser) || '[]');
                 renderHistory();
                 checkStatus();
             } else {
