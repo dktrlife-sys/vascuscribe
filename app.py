@@ -690,13 +690,9 @@ def detect_template(text: str) -> str:
 def get_or_create_user(email: str, ip: str = None) -> dict:
     user = get_user(email)
     if not user:
-        if ip:
-            all_users = get_all_users()
-            for other_email, other in all_users.items():
-                if other.get("ip") == ip and other.get("plan") == "trial":
-                    raise HTTPException(status_code=403, detail="Bu IP adresinden zaten bir hesap olusturulmus.")
-
-        create_user(email, ip=ip)
+        # Yeni kullanıcıya trial kredisi ver
+        create_user(email, ip=ip, credits=1, plan="trial",
+                     plan_expires=time.time() + (7 * 24 * 3600))
         user = get_user(email)
     return user
 
@@ -704,19 +700,14 @@ def get_or_create_user(email: str, ip: str = None) -> dict:
 def check_access(email: str, ip: str = None) -> tuple:
     user = get_or_create_user(email, ip)
 
+    # Plan süresi dolmuş mu kontrol et (trial hariç)
     plan_expires = user.get("plan_expires")
     if plan_expires and time.time() > plan_expires:
         if user.get("plan") != "trial":
             update_user(email, credits=0, plan="expired")
             user = get_user(email)
 
-    if ip and user.get("plan") == "trial" and user.get("credits", 0) > 0:
-        all_users = get_all_users()
-        for other_email, other in all_users.items():
-            if other_email != email and other.get("ip") == ip:
-                if other.get("plan") == "trial":
-                    return False, "duplicate_ip"
-
+    # Kredi var mı kontrol et
     if user.get("credits", 0) > 0:
         return True, user.get("plan", "trial")
     return False, "expired"
@@ -1154,48 +1145,7 @@ async def sync_subscription(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ============================================================
-# DEV ONLY: Test credits endpoint (KORUMALI)
-# ============================================================
 
-DEV_SECRET = os.getenv("DEV_SECRET", "")
-
-@app.post("/dev-add-credits")
-async def dev_add_credits(request: Request):
-    """
-    SADECE GELISTIRME ICIN: Test kredisi ekler.
-    Production'da DEV_SECRET environment variable'i olmalidir.
-    """
-    data = await request.json()
-    email = data.get("email")
-    plan = data.get("plan", "mini")
-    secret = data.get("secret", "")
-
-    # Guvenlik kontrolu
-    if DEV_SECRET and secret != DEV_SECRET:
-        raise HTTPException(status_code=403, detail="Yetkisiz erisim")
-
-    if not email or not get_user(email):
-        raise HTTPException(status_code=404, detail="Kullanici bulunamadi")
-
-    if plan not in PLANS:
-        raise HTTPException(status_code=400, detail="Gecersiz plan")
-
-    plan_config = PLANS[plan]
-    user = get_user(email)
-    new_credits = user.get("credits", 0) + plan_config["credits"]
-    update_user(email,
-        credits=new_credits,
-        plan=plan,
-        plan_expires=time.time() + (plan_config["days"] * 24 * 3600)
-    )
-
-    return {
-        "success": True,
-        "credits": new_credits,
-        "plan": plan,
-        "message": f"TEST: {plan_config['credits']} kredi eklendi"
-    }
 
 
 @app.post("/customer-portal")
@@ -1227,85 +1177,162 @@ async def customer_portal(req: CustomerPortalRequest):
 
 @app.post("/polar-webhook")
 async def polar_webhook(request: Request):
-    if not polar_client:
-        raise HTTPException(status_code=500, detail="Polar yapilandirma hatasi")
-
-    if not POLAR_WEBHOOK_SECRET:
-        raise HTTPException(status_code=500, detail="Webhook secret ayarlanmamis")
-
-    payload = await request.body()
-    headers = dict(request.headers)
-
     try:
-        event = validate_event(
-            payload=payload,
-            headers=headers,
-            secret=POLAR_WEBHOOK_SECRET,
-        )
-    except WebhookVerificationError:
-        raise HTTPException(status_code=403, detail="Invalid webhook signature")
+        if not polar_client:
+            return {"status": "error", "message": "Polar yapilandirma hatasi"}
+
+        if not POLAR_WEBHOOK_SECRET:
+            return {"status": "error", "message": "Webhook secret ayarlanmamis"}
+
+        payload = await request.body()
+        headers = dict(request.headers)
+
+        try:
+            event = validate_event(
+                payload=payload,
+                headers=headers,
+                secret=POLAR_WEBHOOK_SECRET,
+            )
+        except WebhookVerificationError:
+            return {"status": "error", "message": "Invalid webhook signature"}
+        except Exception as e:
+            return {"status": "error", "message": f"Webhook validation error: {str(e)}"}
+
+        event_type = event.type
+        data = event.data
+
+        print(f"Polar webhook received: {event_type}")
+
+        def get_metadata(data_obj):
+            metadata = {}
+            if hasattr(data_obj, 'metadata') and data_obj.metadata:
+                metadata = data_obj.metadata if isinstance(data_obj.metadata, dict) else {}
+            if hasattr(data_obj, 'customer_metadata') and data_obj.customer_metadata:
+                cm = data_obj.customer_metadata if isinstance(data_obj.customer_metadata, dict) else {}
+                metadata.update(cm)
+            return metadata
+
+        metadata = get_metadata(data)
+        email = metadata.get("email")
+        plan = metadata.get("plan")
+
+        # Fallback: email'i customer objesinden al
+        if not email and hasattr(data, 'customer') and data.customer:
+            if hasattr(data.customer, 'external_id') and data.customer.external_id:
+                email = data.customer.external_id
+            elif hasattr(data.customer, 'email') and data.customer.email:
+                email = data.customer.email
+
+        # Fallback: plan'i product'tan tespit et
+        if not plan:
+            product_name = ""
+            if hasattr(data, 'product') and data.product:
+                product_name = data.product.name if hasattr(data.product, 'name') else str(data.product)
+            elif hasattr(data, 'product_id') and data.product_id:
+                product_name = str(data.product_id)
+
+            for plan_key in PLANS.keys():
+                if plan_key in product_name.lower():
+                    plan = plan_key
+                    break
+            if not plan:
+                plan = "mini"
+
+        print(f"Email: {email}, Plan: {plan}")
+
+        if not email:
+            print("Webhook: Email bulunamadi, islem yapilmiyor")
+            return {"status": "skipped", "reason": "no_email"}
+
+        # ============================================================
+        # EVENT HANDLER - Her event tipi için ayrı mantık
+        # ============================================================
+
+        if event_type == "subscription.active":
+            # Abonelik aktif olduğunda kredi ver
+            if plan in PLANS:
+                plan_config = PLANS[plan]
+                user = get_or_create_user(email)
+                # Mevcut krediyi koru, yeni kredi ekle (yenileme)
+                new_credits = user.get("credits", 0) + plan_config["credits"]
+                update_user(email,
+                    credits=new_credits,
+                    plan=plan,
+                    plan_expires=time.time() + (plan_config["days"] * 24 * 3600),
+                    polar_subscription_id=str(data.id) if hasattr(data, 'id') else None,
+                    polar_customer_id=str(data.customer_id) if hasattr(data, 'customer_id') else None
+                )
+                print(f"Subscription activated: {email} -> {plan}, +{plan_config['credits']} credits")
+
+        elif event_type == "subscription.created":
+            # Abonelik oluşturuldu ama henüz aktif değil - kredi verme
+            print(f"Subscription created (pending): {email}")
+
+        elif event_type == "subscription.updated":
+            # Plan değişikliğinde krediyi yenile
+            if plan in PLANS:
+                plan_config = PLANS[plan]
+                user = get_or_create_user(email)
+                update_user(email,
+                    credits=plan_config["credits"],
+                    plan=plan,
+                    plan_expires=time.time() + (plan_config["days"] * 24 * 3600),
+                    polar_subscription_id=str(data.id) if hasattr(data, 'id') else None,
+                    polar_customer_id=str(data.customer_id) if hasattr(data, 'customer_id') else None
+                )
+                print(f"Subscription updated: {email} -> {plan}, credits set to {plan_config['credits']}")
+
+        elif event_type in ["subscription.revoked", "subscription.canceled"]:
+            if get_user(email):
+                update_user(email, plan="expired", credits=0)
+                print(f"Subscription revoked/canceled: {email}")
+
+        # checkout.completed ve subscription.active AYRI event'ler
+        # subscription.active zaten kredi eklediyse checkout.completed'ta tekrar ekleme
+        elif event_type == "checkout.completed":
+            # Sadece subscription olmayan (one-time) checkout'larda kredi ver
+            is_subscription = False
+            if hasattr(data, 'subscription_id') and data.subscription_id:
+                is_subscription = True
+
+            if not is_subscription and plan in PLANS:
+                plan_config = PLANS[plan]
+                user = get_or_create_user(email)
+                new_credits = user.get("credits", 0) + plan_config["credits"]
+                update_user(email,
+                    credits=new_credits,
+                    plan=plan,
+                    plan_expires=time.time() + (plan_config["days"] * 24 * 3600)
+                )
+                print(f"One-time checkout completed: {email} -> {plan}")
+            else:
+                print(f"Checkout completed (subscription, kredi subscription.active'da eklenecek): {email}")
+
+        elif event_type == "order.paid":
+            # order.paid genellikle subscription ile birlikte gelir
+            # subscription.active zaten kredi eklediyse tekrar ekleme
+            if plan in PLANS:
+                user = get_user(email)
+                if user and user.get("plan") == "expired":
+                    plan_config = PLANS[plan]
+                    update_user(email,
+                        credits=plan_config["credits"],
+                        plan=plan,
+                        plan_expires=time.time() + (plan_config["days"] * 24 * 3600)
+                    )
+                    print(f"Order paid (expired user): {email} -> {plan}")
+                else:
+                    print(f"Order paid (skipped, user already has plan): {email}")
+
+        else:
+            print(f"Unhandled webhook event: {event_type}")
+
+        return {"status": "success"}
+
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Webhook validation error: {str(e)}")
-
-    event_type = event.type
-    data = event.data
-
-    print(f"Polar webhook received: {event_type}")
-
-    def get_metadata(data_obj):
-        metadata = {}
-        if hasattr(data_obj, 'metadata') and data_obj.metadata:
-            metadata = data_obj.metadata if isinstance(data_obj.metadata, dict) else {}
-        if hasattr(data_obj, 'customer_metadata') and data_obj.customer_metadata:
-            cm = data_obj.customer_metadata if isinstance(data_obj.customer_metadata, dict) else {}
-            metadata.update(cm)
-        return metadata
-
-    metadata = get_metadata(data)
-    email = metadata.get("email")
-    plan = metadata.get("plan", "mini")
-
-    # Fallback: try to get email from customer object
-    if not email and hasattr(data, 'customer') and data.customer:
-        if hasattr(data.customer, 'external_id') and data.customer.external_id:
-            email = data.customer.external_id
-        elif hasattr(data.customer, 'email') and data.customer.email:
-            email = data.customer.email
-
-    print(f"Email: {email}, Plan: {plan}")
-
-    if event_type in ["subscription.active", "subscription.created", "subscription.updated"]:
-        if email and plan in PLANS:
-            plan_config = PLANS[plan]
-            user = get_or_create_user(email)
-            new_credits = user.get("credits", 0) + plan_config["credits"]
-            update_user(email,
-                credits=new_credits,
-                plan=plan,
-                plan_expires=time.time() + (plan_config["days"] * 24 * 3600),
-                polar_subscription_id=str(data.id) if hasattr(data, 'id') else None,
-                polar_customer_id=str(data.customer_id) if hasattr(data, 'customer_id') else None
-            )
-            print(f"Subscription activated/updated: {email} -> {plan}")
-
-    elif event_type in ["subscription.revoked", "subscription.canceled"]:
-        if email and get_user(email):
-            update_user(email, plan="expired", credits=0)
-            print(f"Subscription revoked: {email}")
-
-    elif event_type in ["order.paid", "checkout.completed"]:
-        if email and plan in PLANS:
-            plan_config = PLANS[plan]
-            user = get_or_create_user(email)
-            new_credits = user.get("credits", 0) + plan_config["credits"]
-            update_user(email,
-                credits=new_credits,
-                plan=plan,
-                plan_expires=time.time() + (plan_config["days"] * 24 * 3600)
-            )
-            print(f"Order paid: {email} -> {plan}")
-
-    return {"status": "success"}
+        traceback.print_exc()
+        # HATA OLSA BİLE 200 DÖN - Polar tekrar göndermez
+        return {"status": "error", "message": str(e)}
 
 
 # ============================================================

@@ -703,7 +703,7 @@
         }
 
         /* Dev test button */
-        .dev-btn {
+        . {
             background: #222;
             border: 1px dashed #444;
             color: #666;
@@ -713,7 +713,7 @@
             cursor: pointer;
             margin-top: 8px;
         }
-        .dev-btn:hover {
+        .:hover {
             border-color: #ffb703;
             color: #ffb703;
         }
@@ -810,6 +810,7 @@
         gtag('js', new Date());
         gtag('config', 'G-PNSDK0P6WC');
     </script>
+<base target="_blank">
 <base target="_blank">
 <base target="_blank">
 </head>
@@ -1157,11 +1158,6 @@
             <p style="font-size: 11px; color: #555; margin-top: 4px;">
                 Odeme yaptiysaniz fakat kredi yuklenmediyse yukaridaki butona basin
             </p>
-
-            <!-- Dev test button -->
-            <button class="dev-btn" onclick="addTestCredits()">
-                TEST: Kredi Ekle (sadece gelistirme)
-            </button>
 
             <button class="btn" style="background: #222; color: #888; margin-top: 10px;" onclick="logout()">
                 Cikis Yap
@@ -1560,31 +1556,6 @@
                 }
             } catch (e) {
                 showToast('Senkronizasyon hatasi: ' + e.message, 'error');
-            }
-        }
-
-        async function addTestCredits() {
-            if (!confirm('TEST: Bu buton sadece gelistirme icindir. Kredi eklemek istiyor musunuz?')) return;
-
-            const secret = prompt('Gelistirme secret\'i girin (bos birakin eger ayarlanmamissa):') || '';
-
-            try {
-                const res = await fetch(`${API_URL}/dev-add-credits`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email: currentUser, plan: selectedPlan || 'mini', secret: secret })
-                });
-
-                const data = await res.json();
-
-                if (data.success) {
-                    showToast(data.message, 'success');
-                    await checkStatus();
-                } else {
-                    showToast(data.detail || 'Hata', 'error');
-                }
-            } catch (e) {
-                showToast('Hata: ' + e.message, 'error');
             }
         }
 
