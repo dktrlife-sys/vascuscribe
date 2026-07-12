@@ -418,10 +418,10 @@ else:
 # POLAR PRODUCT ID'LERI (Price ID degil, Product ID!)
 # ============================================================
 POLAR_PRODUCTS = {
-    "mini":       os.getenv("POLAR_MINI_PRICE_ID", ""),
-    "standard":   os.getenv("POLAR_STANDARD_PRICE_ID", ""),
-    "pro":        os.getenv("POLAR_PRO_PRICE_ID", ""),
-    "enterprise": os.getenv("POLAR_ENTERPRISE_PRICE_ID", ""),
+    "mini":       os.getenv("POLAR_MINI_PRICE_ID", "21528818-9fd6-4a99-8b6c-1baa84a73a75"),
+    "standard":   os.getenv("POLAR_STANDARD_PRICE_ID", "dba65d7f-5b09-455d-939a-2d7e63845136"),
+    "pro":        os.getenv("POLAR_PRO_PRICE_ID", "dca9a64e-12c5-49e4-bcbe-92ee005528e9"),
+    "enterprise": os.getenv("POLAR_ENTERPRISE_PRICE_ID", "0f86bc4a-396d-430b-89f3-a2551898dd7f"),
 }
 
 # ============================================================
@@ -430,11 +430,11 @@ POLAR_PRODUCTS = {
 load_users()
 
 PLANS = {
-    "trial":      {"price": 0,     "credits": 1,   "days": 7},
-    "mini":       {"price": 990,   "credits": 3,   "days": 30},
-    "standard":   {"price": 2300,  "credits": 10,  "days": 30},
-    "pro":        {"price": 4900,  "credits": 25,  "days": 30},
-    "enterprise": {"price": 19900, "credits": 100, "days": 30},
+    "trial":      {"price": 0,    "credits": 1,  "days": 0},
+    "mini":       {"price": 600,  "credits": 3,  "days": 0},
+    "standard":   {"price": 1500, "credits": 10, "days": 0},
+    "pro":        {"price": 3600, "credits": 25, "days": 0},
+    "enterprise": {"price": 6900, "credits": 50, "days": 0},
 }
 
 # ============================================================
@@ -750,14 +750,7 @@ def get_or_create_user(email: str, ip: str = None) -> dict:
 def check_access(email: str, ip: str = None) -> tuple:
     user = get_or_create_user(email, ip)
 
-    # Plan süresi dolmuş mu kontrol et (trial hariç)
-    plan_expires = user.get("plan_expires")
-    if plan_expires and time.time() > plan_expires:
-        if user.get("plan") != "trial":
-            update_user(email, credits=0, plan="expired")
-            user = get_user(email)
-
-    # Kredi var mı kontrol et
+    # Kredi var mı kontrol et (süre sınırı yok)
     if user.get("credits", 0) > 0:
         return True, user.get("plan", "trial")
     return False, "expired"
@@ -846,12 +839,6 @@ async def login(req: LoginRequest):
     if not verify_password(req.password, user.get("password_hash", "")):
         raise HTTPException(status_code=401, detail="Hatali sifre")
 
-    plan_expires = user.get("plan_expires")
-    if plan_expires and time.time() > plan_expires:
-        if user.get("plan") != "trial":
-            update_user(req.email, credits=0, plan="expired")
-            user = get_user(req.email)
-
     token = create_access_token({"sub": req.email})
 
     return {
@@ -864,6 +851,71 @@ async def login(req: LoginRequest):
     }
 
 
+# ============================================================
+# ŞİFRE SIFIRLAMA
+# ============================================================
+import secrets
+import string
+
+# Basit in-memory reset kodları (production'da Redis/DB kullanın)
+reset_codes = {}  # {email: {"code": "123456", "expires": timestamp}}
+
+class ResetRequest(BaseModel):
+    email: str
+
+class ResetConfirmRequest(BaseModel):
+    email: str
+    code: str
+    new_password: str
+
+@app.post("/forgot-password")
+async def forgot_password(req: ResetRequest):
+    """Şifre sıfırlama kodu gönder"""
+    user = get_user(req.email)
+    if not user:
+        # Güvenlik için kullanıcı yoksa bile aynı mesaj
+        return {"success": True, "message": "E-posta adresinize sifirlama kodu gonderildi"}
+
+    # 6 haneli kod üret
+    code = ''.join(secrets.choice(string.digits) for _ in range(6))
+    reset_codes[req.email] = {
+        "code": code,
+        "expires": time.time() + 600  # 10 dakika geçerli
+    }
+
+    # Log'a yaz (gerçekte email gönderilmeli)
+    print(f"SIFIRLAMA KODU {req.email}: {code}")
+
+    return {"success": True, "message": "E-posta adresinize sifirlama kodu gonderildi"}
+
+@app.post("/reset-password")
+async def reset_password(req: ResetConfirmRequest):
+    """Yeni şifre ile sıfırla"""
+    reset_data = reset_codes.get(req.email)
+
+    if not reset_data:
+        raise HTTPException(status_code=400, detail="Sifirlama kodu bulunamadi veya suresi doldu")
+
+    if time.time() > reset_data["expires"]:
+        del reset_codes[req.email]
+        raise HTTPException(status_code=400, detail="Sifirlama kodu suresi doldu")
+
+    if req.code != reset_data["code"]:
+        raise HTTPException(status_code=400, detail="Gecersiz sifirlama kodu")
+
+    if len(req.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Sifre en az 6 karakter olmalidir")
+
+    # Şifreyi güncelle
+    password_hash = hash_password(req.new_password)
+    update_user(req.email, password_hash=password_hash)
+
+    # Kodu temizle
+    del reset_codes[req.email]
+
+    return {"success": True, "message": "Sifreniz basariyla degistirildi"}
+
+
 @app.get("/me")
 async def me(email: str = Depends(verify_token)):
     """Token ile kullanici bilgisi"""
@@ -871,17 +923,10 @@ async def me(email: str = Depends(verify_token)):
     if not user:
         raise HTTPException(status_code=404, detail="Kullanici bulunamadi")
 
-    plan_expires = user.get("plan_expires")
-    if plan_expires and time.time() > plan_expires:
-        if user.get("plan") != "trial":
-            update_user(email, credits=0, plan="expired")
-            user = get_user(email)
-
     return {
         "email": email,
         "credits": user.get("credits", 0),
         "plan": user.get("plan", "trial"),
-        "expires": user.get("plan_expires"),
         "can_use": user.get("credits", 0) > 0
     }
 
@@ -1022,17 +1067,10 @@ async def user_status(email: str, request: Request):
     client_ip = request.client.host
     user = get_or_create_user(email, ip=client_ip)
 
-    plan_expires = user.get("plan_expires")
-    if plan_expires and time.time() > plan_expires:
-        if user.get("plan") != "trial":
-            update_user(email, credits=0, plan="expired")
-            user = get_user(email)
-
     return {
         "email": email,
         "credits": user.get("credits", 0),
         "plan": user.get("plan", "trial"),
-        "expires": user.get("plan_expires"),
         "can_use": user.get("credits", 0) > 0
     }
 

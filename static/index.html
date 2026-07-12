@@ -972,9 +972,10 @@
             <div class="pricing-preview">
                 <h3>Fiyatlandırma</h3>
                 <div class="price-tag"><strong>1</strong>Ücretsiz deneme raporu</div>
-                <div class="price-tag"><strong>$9</strong>Mini - 3 rapor</div>
-                <div class="price-tag"><strong>$23</strong>Standart - 10 rapor</div>
-                <div class="price-tag"><strong>$49</strong>Pro - 25 rapor</div>
+                <div class="price-tag"><strong>$6</strong>Mini - 3 rapor</div>
+                <div class="price-tag"><strong>$15</strong>Standart - 10 rapor</div>
+                <div class="price-tag"><strong>$36</strong>Pro - 25 rapor</div>
+                <div class="price-tag"><strong>$69</strong>Enterprise - 50 rapor</div>
             </div>
 
             <!-- Bottom CTA -->
@@ -1011,11 +1012,33 @@
             <button class="btn btn-primary" onclick="login()">Oturum Ac</button>
             <button class="btn" style="background: #222; color: #888;" onclick="showRegister()">Hesap Olustur</button>
 
-            <div style="margin-top: 20px; font-size: 12px; color: #555;">
+            <div style="margin-top: 16px; font-size: 13px;">
+                <a href="#" onclick="showForgotPassword()" style="color: #20e3b2; text-decoration: none;">Sifremi Unuttum</a>
+            </div>
+
+            <div style="margin-top: 12px; font-size: 12px; color: #555;">
                 <p>1 ucretsiz rapor ile baslayin</p>
             </div>
 
             <span class="back-link" onclick="showLanding()">← Ana Sayfaya Don</span>
+        </div>
+
+        <!-- ŞİFRE SIFIRLAMA EKRANI -->
+        <div id="forgotScreen" class="auth-screen hidden">
+            <div class="logo">🫀</div>
+            <h1>VascuScribe</h1>
+            <p class="subtitle">Sifre Sifirlama</p>
+
+            <input type="email" id="forgotEmail" placeholder="E-posta adresiniz">
+            <button class="btn btn-primary" onclick="sendResetCode()">Kod Gonder</button>
+
+            <div id="resetCodeSection" style="display:none; margin-top: 16px;">
+                <input type="text" id="resetCode" placeholder="6 haneli kod" maxlength="6" style="text-align:center; letter-spacing:8px;">
+                <input type="password" id="newPassword" placeholder="Yeni sifre">
+                <button class="btn btn-primary" onclick="confirmReset()">Sifreyi Sifirla</button>
+            </div>
+
+            <span class="back-link" onclick="showLogin()">← Giris ekranina don</span>
         </div>
 
         <!-- KAYIT EKRANI -->
@@ -1132,18 +1155,23 @@
             <div class="plans-grid">
                 <div class="plan-card" onclick="selectPlan('mini')">
                     <div class="plan-name">Mini</div>
-                    <div class="plan-price">$9</div>
-                    <div class="plan-detail">3 rapor | 30 gun gecerli</div>
+                    <div class="plan-price">$6</div>
+                    <div class="plan-detail">3 rapor</div>
                 </div>
                 <div class="plan-card" onclick="selectPlan('standard')">
                     <div class="plan-name">Standart</div>
-                    <div class="plan-price">$23</div>
-                    <div class="plan-detail">10 rapor | 30 gun gecerli</div>
+                    <div class="plan-price">$15</div>
+                    <div class="plan-detail">10 rapor</div>
                 </div>
                 <div class="plan-card" onclick="selectPlan('pro')">
                     <div class="plan-name">Pro</div>
-                    <div class="plan-price">$49</div>
-                    <div class="plan-detail">25 rapor | 30 gun gecerli</div>
+                    <div class="plan-price">$36</div>
+                    <div class="plan-detail">25 rapor</div>
+                </div>
+                <div class="plan-card" onclick="selectPlan('enterprise')">
+                    <div class="plan-name">Enterprise</div>
+                    <div class="plan-price">$69</div>
+                    <div class="plan-detail">50 rapor</div>
                 </div>
             </div>
 
@@ -1306,13 +1334,14 @@
 
                 const badge = document.getElementById('quotaBadge');
 
-                if (data.plan !== 'trial' && data.plan !== 'expired' && data.credits > 0) {
-                    badge.className = 'badge badge-premium';
-                    badge.textContent = `${data.plan.toUpperCase()} | Kalan: ${data.credits}`;
-                    showScreen('mainScreen');
-                } else if (data.credits > 0) {
-                    badge.className = 'badge badge-free';
-                    badge.textContent = `Kalan Rapor: ${data.credits}`;
+                if (data.credits > 0) {
+                    if (data.plan !== 'trial' && data.plan !== 'expired') {
+                        badge.className = 'badge badge-premium';
+                        badge.textContent = `${data.plan.toUpperCase()} | Kalan: ${data.credits}`;
+                    } else {
+                        badge.className = 'badge badge-free';
+                        badge.textContent = `Kalan Rapor: ${data.credits}`;
+                    }
                     showScreen('mainScreen');
                 } else {
                     showScreen('paymentScreen');
@@ -1556,6 +1585,70 @@
                 }
             } catch (e) {
                 showToast('Senkronizasyon hatasi: ' + e.message, 'error');
+            }
+        }
+
+        function showForgotPassword() {
+            showScreen('forgotScreen');
+            document.getElementById('resetCodeSection').style.display = 'none';
+        }
+
+        async function sendResetCode() {
+            const email = document.getElementById('forgotEmail').value.trim();
+            if (!email) {
+                showToast('E-posta girin', 'error');
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_URL}/forgot-password`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+
+                const data = await res.json();
+                if (res.ok) {
+                    showToast('Kod gonderildi! Loglari kontrol edin.', 'success');
+                    document.getElementById('resetCodeSection').style.display = 'block';
+                } else {
+                    showToast(data.detail || 'Hata', 'error');
+                }
+            } catch (e) {
+                showToast('Sunucu hatasi', 'error');
+            }
+        }
+
+        async function confirmReset() {
+            const email = document.getElementById('forgotEmail').value.trim();
+            const code = document.getElementById('resetCode').value.trim();
+            const newPassword = document.getElementById('newPassword').value;
+
+            if (!code || !newPassword) {
+                showToast('Tum alanlari doldurun', 'error');
+                return;
+            }
+            if (newPassword.length < 6) {
+                showToast('Sifre en az 6 karakter', 'error');
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_URL}/reset-password`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, code, new_password: newPassword })
+                });
+
+                const data = await res.json();
+                if (res.ok) {
+                    showToast('Sifre degistirildi! Giris yapin.', 'success');
+                    showLogin();
+                } else {
+                    showToast(data.detail || 'Hata', 'error');
+                }
+            } catch (e) {
+                showToast('Sunucu hatasi', 'error');
             }
         }
 
