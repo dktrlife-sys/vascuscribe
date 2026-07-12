@@ -292,12 +292,62 @@ if env_path.exists():
                 os.environ[key] = value
 
 app = FastAPI(title="VascuScribe API")
+# ============================================================
+# RATE LIMITING - Basit in-memory
+# ============================================================
+from collections import defaultdict
+import time
+
+class SimpleRateLimiter:
+    """Basit in-memory rate limiter"""
+    def __init__(self, max_requests: int = 30, window_seconds: int = 60):
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+        self.requests = defaultdict(list)
+
+    def is_allowed(self, key: str) -> bool:
+        now = time.time()
+        # Eski istekleri temizle
+        self.requests[key] = [t for t in self.requests[key] if now - t < self.window_seconds]
+
+        if len(self.requests[key]) >= self.max_requests:
+            return False
+
+        self.requests[key].append(now)
+        return True
+
+rate_limiter = SimpleRateLimiter(max_requests=30, window_seconds=60)
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    """Rate limiting middleware"""
+    # Webhook ve health check'leri atla
+    if request.url.path in ["/polar-webhook", "/", "/success", "/robots.txt", "/sitemap.xml"]:
+        return await call_next(request)
+
+    client_ip = request.client.host
+    if not rate_limiter.is_allowed(client_ip):
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "Çok fazla istek. Lütfen biraz bekleyin."},
+            headers={"Retry-After": "60"}
+        )
+
+    return await call_next(request)
+
+
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=[
+        "https://vascuscribe.com",
+        "https://www.vascuscribe.com",
+        "http://localhost:3000",
+        "http://localhost:8000",
+    ],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Admin-Key"],
+    allow_credentials=True,
 )
 
 OPENAI_KEY = os.getenv("OPENAI_API_KEY", "")
@@ -751,6 +801,14 @@ class RegisterRequest(BaseModel):
 @app.post("/register")
 async def register(req: RegisterRequest):
     """Yeni kullanici kaydi"""
+    # Email validasyonu
+    if not req.email or "@" not in req.email or "." not in req.email.split("@")[-1]:
+        raise HTTPException(status_code=400, detail="Gecerli bir e-posta adresi girin")
+
+    # Şifre güçlülüğü
+    if len(req.password) < 6:
+        raise HTTPException(status_code=400, detail="Sifre en az 6 karakter olmalidir")
+
     existing = get_user(req.email)
     if existing and existing.get("password_hash"):
         raise HTTPException(status_code=400, detail="Bu e-posta zaten kayitli")
@@ -838,6 +896,10 @@ async def transcribe_audio(
     audio: UploadFile = File(...),
     email: str = Form(...)
 ):
+    # Email validasyonu
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Gecerli e-posta gerekli")
+
     client_ip = request.client.host
     allowed, status = check_access(email, ip=client_ip)
     if not allowed:
@@ -877,6 +939,10 @@ async def transcribe_audio(
 
 @app.post("/generate")
 async def generate_report(req: ReportRequest, request: Request):
+    # Email validasyonu
+    if not req.email or "@" not in req.email:
+        raise HTTPException(status_code=400, detail="Gecerli e-posta gerekli")
+
     client_ip = request.client.host
     allowed, status = check_access(req.email, ip=client_ip)
     if not allowed:
