@@ -196,10 +196,20 @@ def db_available() -> bool:
     global _db_available
     if _db_available is None:
         _db_available = init_db()
+    # If previously failed, retry connection (Render sleep/wake scenario)
+    if not _db_available:
+        try:
+            conn = get_db()
+            if conn:
+                conn.close()
+                _db_available = True
+                print("PostgreSQL baglantisi yeniden kuruldu")
+        except:
+            pass
     return _db_available
 
 def get_user(email: str) -> dict:
-    """Kullanici getir - DB oncelikli"""
+    """Kullanici getir - HER ZAMAN PostgreSQL oncelikli"""
     if db_available():
         user = db_get_user(email)
         if user:
@@ -208,19 +218,18 @@ def get_user(email: str) -> dict:
             if user.get('created_at'):
                 user['created_at'] = user['created_at'].timestamp() if isinstance(user['created_at'], datetime) else user['created_at']
             return user
+        # DB var ama kullanici yoksa, None don (JSON'a dusme)
+        return None
+    # SADECE DB yoksa JSON'a dus
     return users_db.get(email)
 
 def create_user(email: str, password_hash: str = None, ip: str = None,
                 credits: int = 1, plan: str = "trial", plan_expires = None) -> dict:
-    """Kullanici olustur - DB oncelikli"""
+    """Kullanici olustur - HER ZAMAN PostgreSQL oncelikli"""
     if plan_expires is None:
         plan_expires = time.time() + (7 * 24 * 3600)
 
-    if db_available():
-        db_expires = datetime.fromtimestamp(plan_expires) if isinstance(plan_expires, (int, float)) else plan_expires
-        db_create_user(email, password_hash, ip, credits, plan, db_expires)
-
-    users_db[email] = {
+    user_data = {
         "credits": credits,
         "plan": plan,
         "plan_expires": plan_expires,
@@ -228,15 +237,21 @@ def create_user(email: str, password_hash: str = None, ip: str = None,
         "ip": ip,
         "password_hash": password_hash
     }
+
+    # ONCE PostgreSQL'e yaz
+    if db_available():
+        db_expires = datetime.fromtimestamp(plan_expires) if isinstance(plan_expires, (int, float)) else plan_expires
+        db_create_user(email, password_hash, ip, credits, plan, db_expires)
+        return user_data
+
+    # SADECE DB yoksa JSON'a yaz (lokal gelistirme)
+    users_db[email] = user_data
     save_users()
     return users_db[email]
 
 def update_user(email: str, **kwargs) -> bool:
-    """Kullanici guncelle - DB oncelikli"""
-    if email in users_db:
-        users_db[email].update(kwargs)
-        save_users()
-
+    """Kullanici guncelle - HER ZAMAN PostgreSQL oncelikli"""
+    # ONCE PostgreSQL'e yaz
     if db_available():
         db_kwargs = {}
         for k, v in kwargs.items():
@@ -244,7 +259,13 @@ def update_user(email: str, **kwargs) -> bool:
                 db_kwargs[k] = datetime.fromtimestamp(v)
             else:
                 db_kwargs[k] = v
-        return db_update_user(email, **db_kwargs)
+        result = db_update_user(email, **db_kwargs)
+        return result
+
+    # SADECE DB yoksa JSON'a yaz (lokal gelistirme)
+    if email in users_db:
+        users_db[email].update(kwargs)
+        save_users()
     return True
 
 def user_exists(email: str) -> bool:
@@ -790,7 +811,7 @@ def get_or_create_user(email: str, ip: str = None) -> dict:
 def check_access(email: str, ip: str = None) -> tuple:
     user = get_or_create_user(email, ip)
 
-    # Trial kullanıcıları için süre kontrolü
+    # SADECE trial kullanicilar icin süre kontrolü
     if user.get("plan") == "trial":
         plan_expires = user.get("plan_expires")
         if plan_expires and isinstance(plan_expires, (int, float)):
@@ -798,7 +819,8 @@ def check_access(email: str, ip: str = None) -> tuple:
                 # Trial süresi doldu, kredi varsa bile engelle
                 return False, "trial_expired"
 
-    # Kredi var mı kontrol et
+    # Ucretli planlar (mini/standard/pro/enterprise) icin süre kontrolü YOK
+    # Sadece kredi kontrolü yap
     if user.get("credits", 0) > 0:
         return True, user.get("plan", "trial")
     return False, "expired"
@@ -995,9 +1017,10 @@ async def reset_password(req: ResetConfirmRequest):
     if len(req.new_password) < 6:
         raise HTTPException(status_code=400, detail="Sifre en az 6 karakter olmalidir")
 
-    # Sifreyi guncelle
+    # Sifreyi guncelle ve plan_expires'i 30 gun uzat (erisim sorunu cozumu)
     password_hash = hash_password(req.new_password)
-    update_user(req.email, password_hash=password_hash)
+    new_expires = time.time() + (30 * 24 * 3600)  # 30 gun
+    update_user(req.email, password_hash=password_hash, plan_expires=new_expires)
 
     # Kodu temizle
     del reset_codes[req.email]
